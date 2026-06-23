@@ -37,6 +37,13 @@ export default function PaseVisitaPublico() {
   const [pase, setPase] = useState<Pase | null>(null);
   const [qr, setQr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isGuard, setIsGuard] = useState(false);
+  const [acting, setActing] = useState(false);
+
+  const refrescar = async () => {
+    const { data } = await supabaseBrowser.rpc("get_visita_publica", { p_token: token });
+    setPase((data as unknown as Pase) ?? null);
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -44,11 +51,31 @@ export default function PaseVisitaPublico() {
       .then(setQr)
       .catch(() => setQr(""));
     (async () => {
-      const { data } = await supabaseBrowser.rpc("get_visita_publica", { p_token: token });
-      setPase((data as unknown as Pase) ?? null);
+      await refrescar();
+      // ¿quien abre es vigilancia logueada?
+      const {
+        data: { user },
+      } = await supabaseBrowser.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabaseBrowser
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        const role = (prof as unknown as { role: string } | null)?.role;
+        setIsGuard(!!role && ["guardia", "admin", "comite"].includes(role));
+      }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function accionGuardia(accion: "entrada" | "salida") {
+    setActing(true);
+    await supabaseBrowser.rpc("marcar_visita_por_token", { p_token: token, p_accion: accion });
+    await refrescar();
+    setActing(false);
+  }
 
   if (loading)
     return (
@@ -99,9 +126,32 @@ export default function PaseVisitaPublico() {
         )}
 
         <p className={`mt-5 text-sm font-semibold rounded-xl px-3 py-2 ${est.cls}`}>{est.txt}</p>
-        <p className="text-xs text-slate-400 mt-3">
-          Muestra este código en la caseta de vigilancia.
-        </p>
+
+        {/* Acciones del guardia (solo vigilancia logueada) */}
+        {isGuard && pase.estado === "esperando" && (
+          <button
+            onClick={() => accionGuardia("entrada")}
+            disabled={acting}
+            className="mt-4 w-full rounded-2xl bg-gradient-to-br from-brand-500 to-emerald-600 text-white py-3.5 font-extrabold shadow-lg disabled:opacity-40 active:scale-[0.99] transition"
+          >
+            {acting ? "Registrando…" : "✓ Marcar entrada"}
+          </button>
+        )}
+        {isGuard && pase.estado === "adentro" && (
+          <button
+            onClick={() => accionGuardia("salida")}
+            disabled={acting}
+            className="mt-4 w-full rounded-2xl bg-slate-700 text-white py-3.5 font-extrabold shadow-lg disabled:opacity-40 active:scale-[0.99] transition"
+          >
+            {acting ? "Registrando…" : "Marcar salida"}
+          </button>
+        )}
+
+        {!isGuard && (
+          <p className="text-xs text-slate-400 mt-3">
+            Muestra este código en la caseta de vigilancia.
+          </p>
+        )}
       </div>
 
       <p className="text-xs text-slate-400 mt-6">Vecinity · seguridad para tu comunidad</p>

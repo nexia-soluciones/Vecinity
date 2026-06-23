@@ -57,6 +57,7 @@ export default function Dashboard() {
       const p = prof as unknown as Profile | null;
       if (!p) return router.replace("/esperando");
       if (p.approval_status !== "aprobado") return router.replace("/esperando");
+      if (p.role === "guardia") return router.replace("/vigilancia");
       setProfile(p);
 
       if (p.house_id) {
@@ -174,7 +175,7 @@ export default function Dashboard() {
           <Action emoji="💳" label="Pagar / Subir comprobante" onClick={() => router.push("/dashboard/pagos")} />
           <Action emoji="🚗" label="Mis vehículos" onClick={() => router.push("/dashboard/vehiculos")} />
           <Action emoji="👮" label="Registrar visita" onClick={() => router.push("/dashboard/visitas")} />
-          <Action emoji="📣" label="Reportar incidencia" />
+          <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
         </div>
 
         {/* Botón SOS */}
@@ -188,6 +189,19 @@ export default function Dashboard() {
         {/* Panel comité — aprobaciones */}
         {isAdmin && (
           <section className="mt-7">
+            <button
+              onClick={() => router.push("/vigilancia")}
+              className="mb-3 w-full rounded-2xl bg-slate-800 ring-1 ring-slate-700 p-3.5 flex items-center gap-3 text-left hover:bg-slate-700 transition"
+            >
+              <span className="text-2xl">🛡️</span>
+              <span className="block font-semibold text-white text-sm">
+                Vigilancia
+                <span className="block text-xs text-slate-300 font-normal">
+                  Turno, visitas, reservas, placas y paquetes
+                </span>
+              </span>
+              <span className="ml-auto text-slate-300 text-lg">›</span>
+            </button>
             <button
               onClick={() => router.push("/dashboard/areas")}
               className="mb-3 w-full rounded-2xl bg-purple-50 ring-1 ring-purple-100 p-3.5 flex items-center gap-3 text-left hover:ring-purple-200 transition"
