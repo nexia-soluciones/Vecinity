@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { validateInvitation, completeOnboarding, type InvitationInfo } from "./actions";
@@ -252,6 +253,14 @@ export default function Onboarding() {
             </button>
           )}
         </section>
+
+        {/* ¿Ya tiene cuenta? */}
+        <p className="text-center text-sm text-slate-400 mt-5">
+          ¿Ya tienes cuenta?{" "}
+          <Link href="/login" className="text-brand-600 font-semibold hover:underline">
+            Inicia sesión
+          </Link>
+        </p>
 
         {/* Footer — Powered by NexIA */}
         <footer className="mt-auto pt-10">

@@ -15,7 +15,7 @@ export default function Esperando() {
     (async () => {
       const { data: { user } } = await supabaseBrowser.auth.getUser();
       if (!user) {
-        router.replace("/");
+        router.replace("/login");
         return;
       }
       const { data } = await supabaseBrowser
@@ -36,7 +36,7 @@ export default function Esperando() {
 
   async function salir() {
     await supabaseBrowser.auth.signOut();
-    router.replace("/");
+    router.replace("/login");
   }
 
   const aprobado = estado === "aprobado";

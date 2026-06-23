@@ -44,7 +44,7 @@ export default function Dashboard() {
       const {
         data: { user },
       } = await supabaseBrowser.auth.getUser();
-      if (!user) return router.replace("/");
+      if (!user) return router.replace("/login");
 
       const { data: prof } = await supabaseBrowser
         .from("profiles")
@@ -94,7 +94,7 @@ export default function Dashboard() {
 
   async function salir() {
     await supabaseBrowser.auth.signOut();
-    router.replace("/");
+    router.replace("/login");
   }
 
   if (!ready)
