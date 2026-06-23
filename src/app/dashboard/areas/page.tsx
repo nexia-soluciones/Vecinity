@@ -54,6 +54,8 @@ export default function AreasAdminPage() {
   const [coloniaId, setColoniaId] = useState<string | null>(null);
   const [umbral, setUmbral] = useState<number>(0);
   const [umbralGuardado, setUmbralGuardado] = useState(false);
+  const [tope, setTope] = useState<number>(1000);
+  const [topeGuardado, setTopeGuardado] = useState(false);
   const [areas, setAreas] = useState<Area[]>([]);
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
@@ -99,10 +101,12 @@ export default function AreasAdminPage() {
       if (p.colonia_id) {
         const { data: col } = await supabaseBrowser
           .from("colonias")
-          .select("umbral_reserva")
+          .select("umbral_reserva, tope_multa")
           .eq("id", p.colonia_id)
           .maybeSingle();
-        setUmbral((col as unknown as { umbral_reserva: number } | null)?.umbral_reserva ?? 0);
+        const c = col as unknown as { umbral_reserva: number; tope_multa: number } | null;
+        setUmbral(c?.umbral_reserva ?? 0);
+        setTope(c?.tope_multa ?? 1000);
       }
       await Promise.all([cargarAreas(), cargarPendientes()]);
       setReady(true);
@@ -135,6 +139,13 @@ export default function AreasAdminPage() {
     await supabaseBrowser.from("colonias").update({ umbral_reserva: umbral }).eq("id", coloniaId);
     setUmbralGuardado(true);
     setTimeout(() => setUmbralGuardado(false), 2500);
+  }
+
+  async function guardarTope() {
+    if (!coloniaId) return;
+    await supabaseBrowser.from("colonias").update({ tope_multa: tope }).eq("id", coloniaId);
+    setTopeGuardado(true);
+    setTimeout(() => setTopeGuardado(false), 2500);
   }
 
   async function resolverReserva(id: string, estado: "aprobada" | "rechazada") {
@@ -186,6 +197,33 @@ export default function AreasAdminPage() {
                 className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
               >
                 {umbralGuardado ? "Guardado ✓" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Tope de multas (por villa) */}
+        <section className="mt-5">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">Tope de multas</h2>
+          <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3.5">
+            <p className="text-xs text-slate-500 mb-2">
+              La multa escala por reincidencia (base × veces) pero nunca supera este tope.
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">$</span>
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={tope}
+                onChange={(e) => setTope(Math.max(0, Number(e.target.value)))}
+                className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+              />
+              <button
+                onClick={guardarTope}
+                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
+              >
+                {topeGuardado ? "Guardado ✓" : "Guardar"}
               </button>
             </div>
           </div>

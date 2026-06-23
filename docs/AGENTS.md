@@ -105,6 +105,49 @@ Migración `007_notifications.sql`. Token SOLO en `vecino.tg_send()` (SECURITY D
   vía wrapper `vecino.cron_late_fees(token)` (gate, anon key, sin service role). 53 pagos vencidos pendientes de correr.
 - Todo se registra en `vecino.notifications` (log/auditoría). pg_cron NO existe → schedule por n8n.
 
+## Incidencias / multas — ✅ reporte + resolución comité (2026-06-23)
+Sexta función de paridad (`incident_reports`: **131 pendientes reales** + 7 `fine_categories`).
+- **Migración `014_incidencias.sql`** (aplicada) + **`014b`** (bucket `vecino-evidencias`):
+  - `sugerir_multa(infractor, categoria)` → `monto_base × (multas previas + 1)`, **capado al
+    `colonias.tope_multa`** (migración `015`, default $1,000, editable por el comité en `/dashboard/areas`).
+    Tarifas base Villa Catania: Estac $300 · Mascotas $250 · Amenidades $400 · Ruido $500 · Fachada $1,000.
+  - `reportar_incidencia(infractor, categoria, descripcion, evidencia_url)` → estado `pendiente`,
+    reportante = mi casa (anónimo para el infractor).
+  - `resolver_incidencia(id, accion, monto, nota)` → **solo `is_admin`**: `multar` crea CARGO
+    `aprobado` (`Multa: <cat>`), liga `transaction_id`, sube saldo + recalcula estatus del infractor;
+    `rechazar` cierra con nota. **Enforce del tope** al multar (no excede `tope_multa`). Idempotente (solo si `pendiente`).
+- **UI `/dashboard/incidencias`** (role-aware): residente reporta eligiendo categoría + **casa
+  infractora por número O por placa** (resuelve la casa desde `vehicles` — integra la búsqueda de
+  placa que antes era manual) + evidencia a Storage; comité ve "Por resolver" (cuenta total) con
+  **monto sugerido por reincidencia** y **las placas del infractor** + multar/rechazar. Link en dashboard.
+- `npm run build` limpio. **Pendiente:** apelaciones, vista pública de multas, notificación al infractor.
+
+## Vista vigilante — ✅ operación del guardia (2026-06-23)
+Quinta función de paridad. Conecta visitas, reservas (ciclo de llave) y vehículos.
+- **Migración `013_vigilancia.sql`** (aplicada): helper `is_guard()` (guardia/admin/comité) + RPCs
+  SECURITY DEFINER (el rol `guardia` solo tiene `_read`):
+  - Turno: `iniciar_turno()` (idempotente) / `cerrar_turno()`.
+  - Visitas: `marcar_entrada_visita(id)` / `marcar_salida_visita(id)` (esperando→adentro→completada,
+    sella guardia + timestamp) y `marcar_visita_por_token(token, accion)` para el flujo QR.
+  - Reservas (ciclo de llave): `entregar_area(id)` (aprobada→en_uso) / `devolver_area(id)` (en_uso→completada),
+    sella `guardia_entrega/devolucion` — **esto era la pieza del Django viejo que faltaba**.
+  - Paquetes: `registrar_paquete(house_id, remitente, guia)` / `entregar_paquete(id)`.
+- **UI `/vigilancia`**: turno, buscar placa (lectura directa `vehicles` por colonia), visitas
+  (entrada/salida), reservas de hoy (entregar/devolución), paquetes (registrar/entregar).
+  Guard de rol; `guardia` aterriza aquí directo desde login (dashboard redirige); comité/admin con botón.
+- **QR conectado**: en `/visita/[token]`, si un guardia logueado abre el pase ve botones
+  **entrada/salida** (RPC `marcar_visita_por_token`) — escanear el QR con la cámara nativa basta.
+- **Servicios (migración `016`)**:
+  - **Generales de villa** (Alberca/Limpieza/Basura/Jardinería): 4 botones que togglean
+    entrada/salida (`general_services`; RPC `iniciar_servicio_general(tipo)` / `cerrar_servicio_general(id)`).
+  - **Recurrentes domésticos** (mejora): tabla `service_providers` (registro único con foto) +
+    `external_services` (+`provider_id`,`foto_url`). El proveedor se da de alta UNA vez (nombre, tipo,
+    casa, foto) y el ingreso diario es **un tap** (`ingresar_proveedor`/`salir_proveedor`), con foto del
+    día opcional (📷 → bucket `vecino-evidencias`). `crear_proveedor`: guardia para cualquier casa,
+    residente solo para la suya. (PostgREST: recargado el schema cache tras crear la tabla.)
+- `npm run build` limpio. **Pendiente:** fotos INE/placas (Storage), OCR de placas, gafetes,
+  registro manual de visita en caseta, historial/analytics de entradas.
+
 ## Pagos — ✅ abono + comprobante + aprobación comité (2026-06-23)
 Cuarta función de paridad (libro mayor `transactions`: cargo/abono/ajuste, 2427 tx reales).
 - **Bucket Storage `vecino-comprobantes`** (público, paths `colonia/casa/uuid.ext`) + políticas
