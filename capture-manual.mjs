@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { mkdirSync } from "fs";
 
 const BASE = "http://localhost:3100";
-const OUT = "/Users/juangarces/dev/Vecinity/manual/screens";
+const OUT = "/Users/juangarces/dev/Vecinity/vecinity-app/docs/manual/screens";
 mkdirSync(OUT, { recursive: true });
 
 const VP = { width: 390, height: 844 };
