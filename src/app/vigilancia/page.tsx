@@ -12,6 +12,16 @@ type Visita = {
   fecha_programada: string | null;
   house: { numero: string } | null;
 };
+type HistVisita = {
+  id: string;
+  nombre: string;
+  estado: string;
+  fecha_hora_entrada: string | null;
+  fecha_hora_salida: string | null;
+  foto_identificacion_url: string | null;
+  foto_placas_url: string | null;
+  house: { numero: string } | null;
+};
 type Reserva = {
   id: string;
   estado: string;
@@ -69,6 +79,19 @@ export default function VigilanciaPage() {
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
+  const [historial, setHistorial] = useState<HistVisita[]>([]);
+
+  // Registro manual de visita en caseta (walk-in)
+  const [mvOpen, setMvOpen] = useState(false);
+  const [mvNombre, setMvNombre] = useState("");
+  const [mvCasa, setMvCasa] = useState("");
+  const [mvPlaca, setMvPlaca] = useState("");
+  const [mvIne, setMvIne] = useState<File | null>(null);
+  const [mvPlacaFoto, setMvPlacaFoto] = useState<File | null>(null);
+  const [mvMsg, setMvMsg] = useState<string | null>(null);
+  const [mvBusy, setMvBusy] = useState(false);
+  // Foto INE preparada para una visita por pase QR antes de marcar entrada
+  const [ineStaged, setIneStaged] = useState<Record<string, File>>({});
 
   const [placaQ, setPlacaQ] = useState("");
   const [placaHits, setPlacaHits] = useState<PlacaHit[]>([]);
@@ -137,6 +160,20 @@ export default function VigilanciaPage() {
     setPaquetes((data as unknown as Paquete[]) ?? []);
   }, []);
 
+  const cargarHistorial = useCallback(async () => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const { data } = await supabaseBrowser
+      .from("visitors")
+      .select(
+        "id, nombre, estado, fecha_hora_entrada, fecha_hora_salida, foto_identificacion_url, foto_placas_url, house:houses(numero)"
+      )
+      .gte("fecha_hora_entrada", hoy.toISOString())
+      .order("fecha_hora_entrada", { ascending: false })
+      .limit(40);
+    setHistorial((data as unknown as HistVisita[]) ?? []);
+  }, []);
+
   const cargarGenerales = useCallback(async () => {
     const { data } = await supabaseBrowser
       .from("general_services")
@@ -185,10 +222,11 @@ export default function VigilanciaPage() {
         cargarPaquetes(),
         cargarGenerales(),
         cargarRecurrentes(),
+        cargarHistorial(),
       ]);
       setReady(true);
     })();
-  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes]);
+  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes, cargarHistorial]);
 
   async function subirFoto(file: File, sub: string): Promise<string | null> {
     if (!coloniaId) return null;
@@ -261,11 +299,56 @@ export default function VigilanciaPage() {
   }
 
   async function visitaAccion(id: string, accion: "entrada" | "salida") {
+    // Si hay una foto de INE preparada para esta visita, súbela y adjúntala antes de entrar.
+    if (accion === "entrada" && ineStaged[id]) {
+      const url = await subirFoto(ineStaged[id], "visitas");
+      if (url) await supabaseBrowser.rpc("adjuntar_fotos_visita", { p_id: id, p_foto_ine_url: url });
+      setIneStaged((s) => {
+        const n = { ...s };
+        delete n[id];
+        return n;
+      });
+    }
     await supabaseBrowser.rpc(
       accion === "entrada" ? "marcar_entrada_visita" : "marcar_salida_visita",
       { p_id: id }
     );
-    await cargarVisitas();
+    await Promise.all([cargarVisitas(), cargarHistorial()]);
+  }
+
+  async function registrarVisitaManual() {
+    setMvMsg(null);
+    if (!mvNombre.trim()) return setMvMsg("Escribe el nombre del visitante.");
+    if (!mvCasa.trim()) return setMvMsg("Indica la casa destino.");
+    setMvBusy(true);
+    const { data: h } = await supabaseBrowser
+      .from("houses")
+      .select("id")
+      .eq("numero", mvCasa.trim())
+      .maybeSingle();
+    const house = h as unknown as { id: string } | null;
+    if (!house) {
+      setMvBusy(false);
+      return setMvMsg(`No encontré la casa ${mvCasa}.`);
+    }
+    const ineUrl = mvIne ? await subirFoto(mvIne, "visitas") : null;
+    const placaUrl = mvPlacaFoto ? await subirFoto(mvPlacaFoto, "visitas") : null;
+    const { error } = await supabaseBrowser.rpc("registrar_visita_manual", {
+      p_nombre: mvNombre.trim(),
+      p_house_id: house.id,
+      p_placa: mvPlaca.trim() || null,
+      p_foto_ine_url: ineUrl,
+      p_foto_placa_url: placaUrl,
+    });
+    setMvBusy(false);
+    if (error) return setMvMsg(error.message.replace(/^.*?:\s/, ""));
+    setMvNombre("");
+    setMvCasa("");
+    setMvPlaca("");
+    setMvIne(null);
+    setMvPlacaFoto(null);
+    setMvOpen(false);
+    await Promise.all([cargarVisitas(), cargarHistorial()]);
   }
 
   async function reservaAccion(id: string, accion: "entregar" | "devolver") {
@@ -391,9 +474,72 @@ export default function VigilanciaPage() {
 
         {/* Visitas */}
         <section className="mt-6">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">
-            Visitas <span className="text-slate-400 font-medium">({visitas.length})</span>
-          </h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-slate-700">
+              Visitas <span className="text-slate-400 font-medium">({visitas.length})</span>
+            </h2>
+            <button
+              onClick={() => setMvOpen((v) => !v)}
+              className="text-sm text-brand-600 font-semibold"
+            >
+              {mvOpen ? "Cerrar" : "+ En caseta"}
+            </button>
+          </div>
+
+          {mvOpen && (
+            <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3 mb-2 flex flex-col gap-2">
+              <p className="text-xs text-slate-500">Registrar visita que llega sin pase</p>
+              <div className="flex gap-2">
+                <input
+                  value={mvNombre}
+                  onChange={(e) => setMvNombre(e.target.value)}
+                  placeholder="Nombre del visitante"
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                />
+                <input
+                  value={mvCasa}
+                  onChange={(e) => setMvCasa(e.target.value)}
+                  placeholder="Casa"
+                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                />
+              </div>
+              <input
+                value={mvPlaca}
+                onChange={(e) => setMvPlaca(e.target.value.toUpperCase())}
+                placeholder="Placa (opcional)"
+                className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-slate-500">
+                  Foto INE
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setMvIne(e.target.files?.[0] ?? null)}
+                    className="mt-1 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Foto placas
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setMvPlacaFoto(e.target.files?.[0] ?? null)}
+                    className="mt-1 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                  />
+                </label>
+              </div>
+              {mvMsg && <p className="text-xs text-red-600">{mvMsg}</p>}
+              <button
+                onClick={registrarVisitaManual}
+                disabled={mvBusy}
+                className="rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+              >
+                {mvBusy ? "Registrando…" : "Registrar entrada"}
+              </button>
+            </div>
+          )}
+
           {visitas.length === 0 ? (
             <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
               Sin visitas en espera.
@@ -413,12 +559,29 @@ export default function VigilanciaPage() {
                     </p>
                   </div>
                   {v.estado === "esperando" ? (
-                    <button
-                      onClick={() => visitaAccion(v.id, "entrada")}
-                      className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 shrink-0"
-                    >
-                      Entrada
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label
+                        className={`text-lg cursor-pointer ${ineStaged[v.id] ? "opacity-100" : "opacity-40"}`}
+                        title="Foto del INE (opcional)"
+                      >
+                        📷
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) setIneStaged((s) => ({ ...s, [v.id]: f }));
+                          }}
+                        />
+                      </label>
+                      <button
+                        onClick={() => visitaAccion(v.id, "entrada")}
+                        className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600"
+                      >
+                        Entrada
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => visitaAccion(v.id, "salida")}
@@ -683,6 +846,70 @@ export default function VigilanciaPage() {
                   >
                     Entregar
                   </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Historial de hoy */}
+        <section className="mt-6 mb-6">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">
+            Historial de hoy <span className="text-slate-400 font-medium">({historial.length})</span>
+          </h2>
+          {historial.length === 0 ? (
+            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+              Aún no hay entradas registradas hoy.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {historial.map((h) => (
+                <li
+                  key={h.id}
+                  className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800 truncate">
+                      {h.nombre} · Casa {h.house?.numero ?? "—"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {h.fecha_hora_entrada ? `Entró ${hora(h.fecha_hora_entrada)}` : "—"}
+                      {h.fecha_hora_salida ? ` · Salió ${hora(h.fecha_hora_salida)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {h.foto_identificacion_url && (
+                      <a
+                        href={h.foto_identificacion_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-base"
+                        title="Ver INE"
+                      >
+                        🪪
+                      </a>
+                    )}
+                    {h.foto_placas_url && (
+                      <a
+                        href={h.foto_placas_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-base"
+                        title="Ver placas"
+                      >
+                        🚗
+                      </a>
+                    )}
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        h.estado === "adentro"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {h.estado}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

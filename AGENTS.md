@@ -1,3 +1,11 @@
+# Vecinity — manual del agente
+
+> 📒 **Bitácora canónica del proyecto:** [`docs/AGENTS.md`](docs/AGENTS.md) — estado, BD, migraciones,
+> cuentas demo, scripts de captura y el review E2E (2026-06-27).
+> 🔎 **Para retomar:** [`docs/REVISION_PENDIENTE.md`](docs/REVISION_PENDIENTE.md) — paridad para lanzamiento.
+
+---
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

@@ -2,10 +2,70 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-06-22
+> Última actualización: 2026-06-27
 >
-> 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover),
-> reglas de áreas comunes a validar y orden de construcción. Sesión cerrada el 2026-06-22.
+> 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
+> El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Review end-to-end + manual de usuario (2026-06-27) ✅
+Verificación contra la **BD real de producción** (no solo docs) + captura de pantallas para el manual.
+- **BD sana:** 51 tablas, **RLS en 51/51** (0 tablas bloqueadas sin política), **50 funciones SECURITY DEFINER**,
+  5 triggers. Datos reales intactos: 2 colonias, 119 casas, 285 vehículos, 2,428 tx, 218 incidencias, 119 invitaciones.
+  **Todas las RPCs que llama la UI existen** (crear_reserva, registrar_visita, agregar_vehiculo, registrar_abono,
+  reportar_incidencia, resolver_*, iniciar_turno, marcar_visita_por_token, generar_cobros, convenios, crons…).
+- **`npm run build` limpio** · 13 rutas (4 residente + comité + áreas + vigilancia + pase público dinámico).
+- **Smoke test visual** de las 13 pantallas en los 3 roles + pase público sin login: todas renderizan con datos
+  reales vía RLS (JWT, no service role). Verificada la **integración cross-feature**: una visita creada por el
+  residente aparece en `/vigilancia` del guardia con botón Entrada. Sin errores de consola.
+- **Hallazgo (no bug):** la cuenta `juanperez` (residente) no tenía casa ligada → se ligó a **casa 100** como
+  casa demo (los residentes reales reciben casa vía invitación, así que no es un defecto del producto).
+
+### Cuentas demo (colonia La Cantera) — para captures/pruebas
+| Cuenta | Rol | Password | Notas |
+|---|---|---|---|
+| `comite@cantera.test` | comité | `Comite2026` | casa 128 |
+| `juanperez@cantera.test` | residente | `Vecino2026` | ligado a **casa 100** (al corriente) para demo |
+| `guardia@cantera.test` | guardia | `Guardia2026` | aterriza en `/vigilancia` |
+
+> Passwords fijados vía **Auth Admin API** (`PUT /auth/v1/admin/users/{id}`), no por MCP
+> (`update_auth_user` exige DATABASE_URL = puerto 5432 bloqueado).
+
+### Capturas del manual
+- `capture-manual.mjs` — onboarding + login + comité + esperando (capturas 01–07). **No re-correr a la ligera**:
+  el flujo de onboarding **crea un usuario real** (invitación `DEMO-MANUAL`).
+- `capture-manual-2.mjs` — **funciones del 23-jun** (capturas 08–18, Playwright 390×844). Logea como
+  residente/comité/guardia y captura dashboard, reservas, visitas+QR, pase público, vehículos, pagos,
+  incidencias, panel comité, áreas y vigilancia. **Es idempotente**: crea 1 visita ("María López") + 1 vehículo
+  ("DEMO01A") de ejemplo; limpiarlos antes de re-correr con el DELETE de abajo.
+- `next.config.ts` lleva `devIndicators: false` para capturas limpias (solo afecta dev, inocuo en prod).
+- Limpieza de datos de ejemplo (deja la casa demo intacta):
+  ```sql
+  DELETE FROM vecino.visitors WHERE house_id='26189134-1f76-47de-9233-a7f1a64d5443' AND nombre='María López';
+  DELETE FROM vecino.vehicles WHERE house_id='26189134-1f76-47de-9233-a7f1a64d5443' AND placa='DEMO01A';
+  ```
+- Manual de usuario actualizado: `manual/Manual_de_Uso_Vecinity.md` (16 secciones, 18 capturas).
+
+### Gaps confirmados para lanzar (no son bugs; falta construir)
+- **Caseta:** fotos INE/placas + registro manual de visita en caseta (lo usan a diario los guardias).
+- **Finanzas comité:** conciliación bancaria CSV + dashboard de gastos + export.
+- **Limpieza:** 36/285 placas placeholder.
+- **Deploy real:** lo ejecuta Daniel en EasyPanel (se puede reusar el slot `vecinovigilante.nexiasoluciones.com.mx`).
+
+## Caseta — registro manual + fotos INE/placas + historial (2026-06-27) ✅
+Cierra el pendiente #1 de lanzamiento. **Migración `021_caseta.sql`** (aplicada vía `/pg/query`):
+- `registrar_visita_manual(nombre, house_id, placa, foto_ine_url, foto_placa_url)` — walk-in sin pase:
+  entra como `adentro`, sella `guardia_entrada_id`+`fecha_hora_entrada`. **GOTCHA:** `visitors.origen_registro`
+  tiene CHECK `IN ('vecino','vigilante')` → se usa **`'vigilante'`** (no un valor nuevo, evita abort 23514).
+- `adjuntar_fotos_visita(id, foto_ine_url, foto_placa_url)` — para el flujo QR: el guardia adjunta fotos
+  al marcar entrada (no pisa fotos previas, `coalesce`). Ambas SECURITY DEFINER gateadas por `is_guard()`.
+- **El esquema ya tenía los campos** (`foto_identificacion_url`, `foto_placas_url`, `plate_detected`,
+  `origen_registro`, sellos guardia/hora) desde `002` — solo faltaban las RPCs + UI.
+- **UI `/vigilancia`**: form "+ En caseta" (nombre, casa, placa, foto INE, foto placas), 📷 para adjuntar
+  INE a una visita QR antes de Entrada, y sección **Historial de hoy** (entradas/salidas del día con enlaces
+  a las fotos). Fotos a Storage `vecino-evidencias` (subcarpeta `visitas`) vía el helper `subirFoto` existente.
+- **Verificado E2E** con cuenta `guardia`: registro manual → visita `adentro` (origen `vigilante`, placa,
+  sellos) + aparece en Historial. `npm run build` limpio. 0 errores de consola.
+- **Pendiente caseta (post-lanzamiento):** OCR de placas (visión Claude, no Tesseract) · gafetes (nexia-print-bridge).
 
 ## Qué es
 Producto unificado (decisión 2026-06-22) que fusiona dos ideas:
