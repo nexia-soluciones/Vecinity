@@ -78,7 +78,29 @@ Cierra el pendiente #1 de lanzamiento. **Migración `021_caseta.sql`** (aplicada
   fecha, comprobante a Storage `vecino-evidencias/gastos`), lista con borrar, y **export CSV**
   (Blob client-side, con BOM UTF-8 para Excel). Enlazada desde el panel del comité (sección Finanzas).
 - **Verificado E2E** con `comite@cantera.test`: insert vía RLS ok (sello registrado_por), desglose y CSV. Build limpio.
-- **Pendiente finanzas (siguiente):** conciliación bancaria CSV (match depósito↔casa → abonos), censo.
+- **Pendiente finanzas (siguiente):** conciliación bancaria (ver abajo), censo.
+
+## Finanzas — conciliación bancaria de ingresos (2026-06-27) ✅
+Replica el flujo del Excel del comité (`Dashboard_Financiero_Villa_Catania` en el vault Obsidian):
+suben el estado de cuenta BBVA (Excel) y asignan cada **abono** a su casa. **Insight clave:** el banco
+**no dice qué casa pagó** (la referencia SPEI es un folio por transacción) → el match es manual/asistido.
+- **Migración `022_conciliacion.sql`** (aplicada):
+  - `transactions.banco_hash` + índice único parcial → **dedup** (no reimportar la misma fila del banco).
+  - Tabla **`bank_ref_map`** (colonia, ref_key, house_id, veces) → **mapeo aprendido**: al asignar una casa
+    a un concepto, se recuerda y se autosugiere después. RLS admin.
+  - RPC **`conciliar_abono(house_id, monto, concepto, banco_hash, ref_key)`**: dedup → inserta abono
+    `pendiente` → **`PERFORM resolver_transaccion(id, true)`** (reusa el ajuste de saldo/estatus existente)
+    → upsert en `bank_ref_map`. Decisión: **abono aprobado directo** (el banco ya confirmó el ingreso).
+- **UI `/dashboard/conciliacion`** (SheetJS `xlsx@0.18.5`): sube .xlsx → localiza la fila de encabezado
+  (Día/Concepto/Cargo/Abono/Saldo) de forma flexible → lista los **ingresos** (ignora egresos), con casa
+  sugerida del mapa aprendido + asignación manual, y marca los **ya importados** (dedup por hash SHA-256
+  del cliente). "Conciliar seleccionados" llama `conciliar_abono` por fila. Enlazada desde el panel del comité.
+- **Verificado E2E** con `comite@cantera.test` + .xlsx de prueba: 2 abonos conciliados → saldo de casas
+  ajustado, mapeo aprendido, egreso ignorado, dedup ok, 0 errores de consola. Build limpio. Datos de prueba limpiados.
+- **ref_key** = concepto normalizado (UPPER + espacios colapsados). Honesto: solo auto-sugiere cuando el
+  concepto se repite idéntico (pagador con cuenta fija); los SPEI con folio variable quedan manuales (mejora con el uso).
+- **Pendiente finanzas (siguiente):** detección de multas (pago > cuota) en la conciliación · importar egresos
+  del mismo estado de cuenta (auto-categorizar) · censo.
 
 ## Qué es
 Producto unificado (decisión 2026-06-22) que fusiona dos ideas:

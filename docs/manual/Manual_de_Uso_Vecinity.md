@@ -20,7 +20,7 @@
 11. [Botón de pánico (SOS)](#11-botón-de-pánico-sos)
 
 **Para el comité y la caseta**
-12. [Panel del comité](#12-panel-del-comité) · [Gastos de la colonia](#gastos-de-la-colonia)
+12. [Panel del comité](#12-panel-del-comité) · [Gastos](#gastos-de-la-colonia) · [Conciliación bancaria](#conciliación-bancaria)
 13. [Gestionar áreas comunes](#13-gestionar-áreas-comunes)
 14. [Vista de vigilancia (caseta)](#14-vista-de-vigilancia-caseta)
 
@@ -181,6 +181,12 @@ También apruebas a los nuevos vecinos desde **Solicitudes pendientes** en tu pa
 Desde el panel del comité, en **Finanzas**, entras a **Gastos de la colonia**. Ahí registras cada gasto (concepto, monto, **categoría**, fecha y un **comprobante** opcional), ves el **total** y el **desglose por categoría**, y puedes **exportar todo a CSV** (para Excel o tu contador).
 
 <img src="screens/20-gastos.png" width="300" />
+
+### Conciliación bancaria
+
+En **Finanzas → Conciliación bancaria** subes el **estado de cuenta del banco** (el Excel que descargas de BBVA) y la app lista cada **pago recibido**. Asignas cada pago a su **casa** (la app **recuerda** tus asignaciones y las sugiere la próxima vez), y al confirmar **se abona el saldo de esa casa automáticamente**. Los pagos ya importados antes se marcan para no duplicarlos.
+
+<img src="screens/21-conciliacion.png" width="300" />
 
 ---
 
