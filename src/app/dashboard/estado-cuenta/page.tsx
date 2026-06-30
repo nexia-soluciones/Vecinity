@@ -117,14 +117,17 @@ export default function EstadoCuentaPage() {
   const pendientes = movs.filter((m) => m.estado === "pendiente");
   const rechazados = movs.filter((m) => m.estado === "rechazado");
 
-  // Saldo corriente por fila: suma de los movimientos aprobados hasta esa fila (cargo +, abono −)
-  const filas = movs.map((m, i) => {
-    const saldo = movs
-      .slice(0, i + 1)
-      .filter((x) => x.estado === "aprobado")
-      .reduce((s, x) => s + (x.tipo === "cargo" ? Number(x.monto) : -Number(x.monto)), 0);
-    return { m, saldo };
-  });
+  // Saldo corriente por fila: suma de los movimientos aprobados hasta esa fila (cargo +, abono −).
+  // Se calcula en orden cronológico y luego se muestra al revés (lo más reciente primero).
+  const filas = movs
+    .map((m, i) => {
+      const saldo = movs
+        .slice(0, i + 1)
+        .filter((x) => x.estado === "aprobado")
+        .reduce((s, x) => s + (x.tipo === "cargo" ? Number(x.monto) : -Number(x.monto)), 0);
+      return { m, saldo };
+    })
+    .reverse();
 
   return (
     <main className="flex-1 bg-gradient-to-b from-brand-50 via-white to-sky-50">
