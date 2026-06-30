@@ -7,6 +7,42 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Cutover / lanzamiento a Villa Catania (2026-06-30) 🚀
+Mecanismo de migración de residentes del sistema viejo (Django/PythonAnywhere) a la app nueva, validado en prod.
+- **Hallazgo clave:** el login viejo es `username=casa_NNN + password` de Django; **solo 6 de 124 usuarios tienen
+  email real** (111 traen `'nan'` de un import) → **NO se puede "mandar liga de reset por email"**. El camino correcto
+  es el onboarding por **código de invitación** (`CAT-<casa>`), que ya estaba sembrado: **119 invitaciones, 0 usadas**.
+- **Reconciliación de saldos** legacy (`db.sqlite3`, foto 22-jun) vs `vecino.houses`: **migración fiel**, única
+  diferencia Casa 170 ($0→$300, confirmar con comité). Sumas $64,761 vs $65,061.
+- **Auto-aprobación (deployada, commit `7c70c05`):** `completeOnboarding` ahora pone `approval_status: "aprobado"`
+  (el código CAT-NNN ya prueba identidad) → el vecino entra directo al dashboard, sin 119 aprobaciones manuales.
+  **Validado en prod con CAT-128** (Juan, casa 128): `accepted_at` marcado + perfil `aprobado`.
+- **Acceso del comité:** las 119 invitaciones son role `residente`. Se elevó la cuenta de Juan (casa 128) a `comite`
+  y se **eliminó la cuenta demo `comite@cantera.test`** (perfil + auth user) — credenciales conocidas, riesgo en prod.
+  ⚠️ La tabla "Cuentas demo" de abajo ya NO aplica para `comite@cantera.test` (borrada).
+- **Redirect PythonAnywhere:** `proyecto-condominio/config/urls.py` reescrito a una landing "nos mudamos" que
+  intercepta todo (menos `/admin/`) y manda a `https://vecinity.nexiasoluciones.com.mx` con instructivo del código.
+  Reversible (urlpatterns viejo comentado al final). **Pendiente:** Juan sube + Reload en PythonAnywhere.
+- **Distribución:** `docs/distribucion_codigos.csv` (116 casas reales, sin las 3 cuentas de servicio Alberca/
+  Jardinería/Vigilancia) — 114 con link WhatsApp pre-llenado, 2 sin teléfono (entrega en persona). **NO commiteado** (PII).
+- App pública viva: `https://vecinity.nexiasoluciones.com.mx` (deploy EasyPanel auto desde push a `main`).
+- **Redirect PythonAnywhere DEPLOYADO** (consola Bash, no git): `config/urls.py` ahora sirve la landing "nos mudamos".
+  Gotcha que costó: la primera versión usaba `_LANDING % NUEVO_SITIO` pero el CSS tiene `%` literales (`100%`,`40%`)
+  → Python intenta interpretarlos como formato → `ValueError` en runtime (Django "Something went wrong"). `ast.parse`
+  NO lo detecta (solo sintaxis). Fix: quitar el operador `%`, URL hardcodeada en el `href`. Otro gotcha: el comando
+  base64 de una sola línea (~3KB) se **trunca al pegar** en la consola web → escribió archivo vacío sin error;
+  usar **heredoc multilínea** (`cat > f <<'EOF'`) que se pega completo.
+- **Guardias (1 cuenta por guardia, role `guardia`, aprobados, colonia Villa Catania, sin house_id):**
+  Antonio Serrano (`antonio.serrano@villacatania.mx`) y Felipe (`felipe.caseta@villacatania.mx`), pass temporal
+  `Caseta2026` (correos solo-login, reset por correo NO aplica → cambio de pass vía Admin API). Login verificado.
+  ⚠️ Sigue viva la cuenta demo `guardia@cantera.test`/`Guardia2026` (creds conocidas) — pendiente borrar.
+- **Cámara forzada en caseta (commit `792fd1c`, deployado):** los 5 inputs de foto de `/vigilancia` (INE+placas
+  de visita walk-in, INE al dar entrada, proveedor nuevo y "foto del día" de recurrentes) tenían solo
+  `accept="image/*"` (dejaban elegir galería) → se agregó `capture="environment"` para abrir la cámara trasera
+  directo en el celular. Auditoría confirmó: visitas tienen `foto_identificacion_url`/`foto_placas_url`/`plate_ocr`(+conf)
+  con OCR activo (`leerPlaca`→`set_visita_plate`); recurrentes = `external_services.foto_url` vía `ingresar_proveedor`;
+  bucket `vecino-evidencias` existe. `general_services` (servicios de colonia) no lleva foto (no la necesita).
+
 ## Review end-to-end + manual de usuario (2026-06-27) ✅
 Verificación contra la **BD real de producción** (no solo docs) + captura de pantallas para el manual.
 - **BD sana:** 51 tablas, **RLS en 51/51** (0 tablas bloqueadas sin política), **50 funciones SECURITY DEFINER**,
