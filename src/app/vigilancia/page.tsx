@@ -427,18 +427,18 @@ export default function VigilanciaPage() {
 
   return (
     <main className="flex-1 bg-gradient-to-b from-slate-50 via-white to-sky-50">
-      <div className="w-full max-w-md md:max-w-5xl mx-auto px-5 py-6 flex flex-col">
+      <div className="w-full max-w-md md:max-w-6xl mx-auto px-5 py-6 flex flex-col">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-sm text-slate-500 hover:text-slate-700"
+            className="text-base text-slate-500 hover:text-slate-700"
           >
             ← Volver
           </button>
           <Image src="/brand/vecinity-logo.svg" alt="Vecinity" width={120} height={34} priority />
           <button
             onClick={salir}
-            className="text-xs text-slate-400 hover:text-slate-600"
+            className="text-base text-slate-400 hover:text-slate-600"
           >
             Salir
           </button>
@@ -452,23 +452,22 @@ export default function VigilanciaPage() {
             turnoId ? "bg-gradient-to-br from-brand-500 to-emerald-600" : "bg-gradient-to-br from-slate-600 to-slate-800"
           }`}
         >
-          <p className="text-white/80 text-sm">Turno</p>
+          <p className="text-white/80 text-base">Turno</p>
           <p className="text-xl font-extrabold mt-1">
             {turnoId ? `En turno desde ${turnoDesde ? desde(turnoDesde) : ""}` : "Fuera de turno"}
           </p>
           <button
             onClick={() => turno(turnoId ? "cerrar" : "iniciar")}
-            className="mt-3 rounded-xl bg-white/20 hover:bg-white/30 px-4 py-2 text-sm font-semibold"
+            className="mt-3 rounded-xl bg-white/20 hover:bg-white/30 px-4 py-2 text-base font-semibold"
           >
             {turnoId ? "Cerrar turno" : "Iniciar turno"}
           </button>
         </div>
 
-        {/* Secciones operativas: 1 columna en teléfono, 2 columnas (masonry) en tablet */}
-        <div className="md:columns-2 md:gap-x-5">
+        {/* Secciones en stack vertical; las tarjetas de cada sección llenan el ancho en tablet */}
         {/* Buscar placa */}
-        <section className="mt-5 break-inside-avoid">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">Buscar placa</h2>
+        <section className="mt-5">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">Buscar placa</h2>
           <div className="flex gap-2">
             <input
               value={placaQ}
@@ -479,19 +478,19 @@ export default function VigilanciaPage() {
             />
             <button
               onClick={buscarPlaca}
-              className="rounded-xl bg-slate-700 text-white text-sm font-semibold px-4 py-2"
+              className="rounded-xl bg-slate-700 text-white text-base font-semibold px-4 py-2"
             >
               Buscar
             </button>
           </div>
           {placaHits.length > 0 && (
-            <ul className="flex flex-col gap-2 mt-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 mt-2">
               {placaHits.map((v) => (
                 <li key={v.id} className="bg-white rounded-2xl p-3 ring-1 ring-slate-100">
-                  <p className="font-semibold text-slate-800">
+                  <p className="text-lg font-semibold text-slate-800">
                     {v.placa} · Casa {v.house?.numero ?? "—"}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-base text-slate-500">
                     {[v.brand?.nombre, v.model?.nombre, v.color].filter(Boolean).join(" · ") || "—"} ·{" "}
                     <span className={v.estado === "aprobado" ? "text-emerald-600" : "text-amber-600"}>
                       {v.estado}
@@ -504,14 +503,14 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Visitas */}
-        <section className="mt-6 break-inside-avoid">
+        <section className="mt-6">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-slate-700">
+            <h2 className="text-lg font-bold text-slate-700">
               Visitas <span className="text-slate-400 font-medium">({visitas.length})</span>
             </h2>
             <button
               onClick={() => setMvOpen((v) => !v)}
-              className="text-sm text-brand-600 font-semibold"
+              className="text-base text-brand-600 font-semibold"
             >
               {mvOpen ? "Cerrar" : "+ En caseta"}
             </button>
@@ -519,54 +518,54 @@ export default function VigilanciaPage() {
 
           {mvOpen && (
             <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3 mb-2 flex flex-col gap-2">
-              <p className="text-xs text-slate-500">Registrar visita que llega sin pase</p>
+              <p className="text-base text-slate-500">Registrar visita que llega sin pase</p>
               <div className="flex gap-2">
                 <input
                   value={mvNombre}
                   onChange={(e) => setMvNombre(e.target.value)}
                   placeholder="Nombre del visitante"
-                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                 />
                 <input
                   value={mvCasa}
                   onChange={(e) => setMvCasa(e.target.value)}
                   placeholder="Casa"
-                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                 />
               </div>
               <input
                 value={mvPlaca}
                 onChange={(e) => setMvPlaca(e.target.value.toUpperCase())}
                 placeholder="Placa (opcional)"
-                className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
+                className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
               />
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-slate-500">
+                <label className="text-base text-slate-500">
                   Foto INE
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => setMvIne(e.target.files?.[0] ?? null)}
-                    className="mt-1 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                    className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                   />
                 </label>
-                <label className="text-xs text-slate-500">
+                <label className="text-base text-slate-500">
                   Foto placas
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => setMvPlacaFoto(e.target.files?.[0] ?? null)}
-                    className="mt-1 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                    className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                   />
                 </label>
               </div>
-              {mvMsg && <p className="text-xs text-red-600">{mvMsg}</p>}
+              {mvMsg && <p className="text-base text-red-600">{mvMsg}</p>}
               <button
                 onClick={registrarVisitaManual}
                 disabled={mvBusy}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+                className="rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
               >
                 {mvBusy ? "Registrando…" : "Registrar entrada"}
               </button>
@@ -574,19 +573,19 @@ export default function VigilanciaPage() {
           )}
 
           {visitas.length === 0 ? (
-            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+            <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
               Sin visitas en espera.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visitas.map((v) => (
                 <li
                   key={v.id}
                   className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">{v.nombre}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-lg font-semibold text-slate-800 truncate">{v.nombre}</p>
+                    <p className="text-base text-slate-500">
                       Casa {v.house?.numero ?? "—"}
                       {v.fecha_programada ? ` · ${hora(v.fecha_programada)}` : ""}
                     </p>
@@ -594,7 +593,7 @@ export default function VigilanciaPage() {
                   {v.estado === "esperando" ? (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <label
-                        className={`text-lg cursor-pointer ${ineStaged[v.id] ? "opacity-100" : "opacity-40"}`}
+                        className={`text-3xl cursor-pointer ${ineStaged[v.id] ? "opacity-100" : "opacity-60"}`}
                         title="Foto del INE (opcional)"
                       >
                         📷
@@ -611,7 +610,7 @@ export default function VigilanciaPage() {
                       </label>
                       <button
                         onClick={() => visitaAccion(v.id, "entrada")}
-                        className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600"
+                        className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
                       >
                         Entrada
                       </button>
@@ -619,7 +618,7 @@ export default function VigilanciaPage() {
                   ) : (
                     <button
                       onClick={() => visitaAccion(v.id, "salida")}
-                      className="rounded-xl bg-slate-700 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                      className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                     >
                       Salida
                     </button>
@@ -631,40 +630,40 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Reservas (ciclo de llave) */}
-        <section className="mt-6 break-inside-avoid">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">
+        <section className="mt-6">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">
             Reservas de hoy <span className="text-slate-400 font-medium">({reservas.length})</span>
           </h2>
           {reservas.length === 0 ? (
-            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+            <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
               Sin reservas para entregar.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {reservas.map((r) => (
                 <li
                   key={r.id}
                   className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">
+                    <p className="text-lg font-semibold text-slate-800 truncate">
                       {r.area?.icono} {r.area?.nombre} · Casa {r.house?.numero ?? "—"}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-base text-slate-500">
                       {hora(r.fecha_hora_inicio)}–{hora(r.fecha_hora_fin)}
                     </p>
                   </div>
                   {r.estado === "aprobada" ? (
                     <button
                       onClick={() => reservaAccion(r.id, "entregar")}
-                      className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 shrink-0"
+                      className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600 shrink-0"
                     >
                       Entregar
                     </button>
                   ) : (
                     <button
                       onClick={() => reservaAccion(r.id, "devolver")}
-                      className="rounded-xl bg-slate-700 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                      className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                     >
                       Devolución
                     </button>
@@ -676,9 +675,9 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Servicios de la villa */}
-        <section className="mt-6 break-inside-avoid">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">Servicios de la villa</h2>
-          <div className="grid grid-cols-2 gap-2">
+        <section className="mt-6">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">Servicios de la villa</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {GENERALES.map((g) => {
               const abierto = generales.find((x) => x.tipo === g.key);
               return (
@@ -693,10 +692,10 @@ export default function VigilanciaPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xl">{g.emoji}</span>
-                    {abierto && <span className="text-[10px] font-bold">● DENTRO</span>}
+                    {abierto && <span className="text-sm font-bold">● DENTRO</span>}
                   </div>
-                  <p className="text-sm font-semibold mt-1">{g.label}</p>
-                  <p className={`text-[11px] ${abierto ? "text-white/80" : "text-slate-400"}`}>
+                  <p className="text-base font-semibold mt-1">{g.label}</p>
+                  <p className={`text-sm ${abierto ? "text-white/80" : "text-slate-400"}`}>
                     {abierto ? `Entró ${desde(abierto.entrada)} · tocar = salida` : "Tocar = entrada"}
                   </p>
                 </button>
@@ -706,14 +705,14 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Servicios recurrentes (domésticos) */}
-        <section className="mt-6 break-inside-avoid">
+        <section className="mt-6">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-slate-700">
+            <h2 className="text-lg font-bold text-slate-700">
               Recurrentes <span className="text-slate-400 font-medium">({providers.length})</span>
             </h2>
             <button
               onClick={() => setShowAdd((v) => !v)}
-              className="text-sm text-brand-600 font-semibold"
+              className="text-base text-brand-600 font-semibold"
             >
               {showAdd ? "Cerrar" : "+ Nuevo"}
             </button>
@@ -726,20 +725,20 @@ export default function VigilanciaPage() {
                   value={npNombre}
                   onChange={(e) => setNpNombre(e.target.value)}
                   placeholder="Nombre (ej. María)"
-                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                 />
                 <input
                   value={npCasa}
                   onChange={(e) => setNpCasa(e.target.value)}
                   placeholder="Casa"
-                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                 />
               </div>
               <div className="flex gap-2">
                 <select
                   value={npTipo}
                   onChange={(e) => setNpTipo(e.target.value)}
-                  className="rounded-xl ring-1 ring-slate-200 px-2 py-2 text-sm text-slate-800 bg-white outline-none focus:ring-2 focus:ring-brand-300"
+                  className="rounded-xl ring-1 ring-slate-200 px-2 py-2 text-base text-slate-800 bg-white outline-none focus:ring-2 focus:ring-brand-300"
                 >
                   <option value="limpieza">Limpieza</option>
                   <option value="jardineria">Jardinería</option>
@@ -752,13 +751,13 @@ export default function VigilanciaPage() {
                   accept="image/*"
                     capture="environment"
                   onChange={(e) => setNpFile(e.target.files?.[0] ?? null)}
-                  className="flex-1 text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                  className="flex-1 text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                 />
               </div>
-              {npMsg && <p className="text-xs text-red-600">{npMsg}</p>}
+              {npMsg && <p className="text-base text-red-600">{npMsg}</p>}
               <button
                 onClick={agregarProveedor}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600"
+                className="rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600"
               >
                 Guardar proveedor recurrente
               </button>
@@ -766,11 +765,11 @@ export default function VigilanciaPage() {
           )}
 
           {providers.length === 0 ? (
-            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+            <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
               Sin proveedores recurrentes registrados.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {providers.map((pr) => {
                 const dentro = activos.find((a) => a.provider_id === pr.id);
                 return (
@@ -791,8 +790,8 @@ export default function VigilanciaPage() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-800 truncate">{pr.nombre}</p>
-                      <p className="text-xs text-slate-500 truncate">
+                      <p className="text-lg font-semibold text-slate-800 truncate">{pr.nombre}</p>
+                      <p className="text-base text-slate-500 truncate">
                         {pr.tipo} · Casa {pr.house?.numero ?? "—"}
                         {dentro ? " · ● dentro" : ""}
                       </p>
@@ -800,14 +799,14 @@ export default function VigilanciaPage() {
                     {dentro ? (
                       <button
                         onClick={() => salirProveedor(dentro.id)}
-                        className="rounded-xl bg-slate-700 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                        className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                       >
                         Salida
                       </button>
                     ) : (
                       <div className="flex items-center gap-1.5 shrink-0">
                         <label
-                          className={`text-lg cursor-pointer ${staged[pr.id] ? "opacity-100" : "opacity-40"}`}
+                          className={`text-3xl cursor-pointer ${staged[pr.id] ? "opacity-100" : "opacity-60"}`}
                           title="Foto del día (opcional)"
                         >
                           📷
@@ -824,7 +823,7 @@ export default function VigilanciaPage() {
                         </label>
                         <button
                           onClick={() => ingresarProveedor(pr.id)}
-                          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600"
+                          className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
                         >
                           Entrada
                         </button>
@@ -838,8 +837,8 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Paquetes */}
-        <section className="mt-6 mb-4 break-inside-avoid">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">
+        <section className="mt-6 mb-4">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">
             Paquetes <span className="text-slate-400 font-medium">({paquetes.length})</span>
           </h2>
           <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3 flex gap-2 mb-2">
@@ -857,28 +856,28 @@ export default function VigilanciaPage() {
             />
             <button
               onClick={registrarPaquete}
-              className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600"
+              className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
             >
               +
             </button>
           </div>
-          {pkgMsg && <p className="text-xs text-slate-500 mb-2">{pkgMsg}</p>}
+          {pkgMsg && <p className="text-base text-slate-500 mb-2">{pkgMsg}</p>}
           {paquetes.length > 0 && (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {paquetes.map((p) => (
                 <li
                   key={p.id}
                   className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">
+                    <p className="text-lg font-semibold text-slate-800 truncate">
                       Casa {p.house?.numero ?? "—"} · {p.remitente}
                     </p>
-                    <p className="text-xs text-slate-500">{p.estado}</p>
+                    <p className="text-base text-slate-500">{p.estado}</p>
                   </div>
                   <button
                     onClick={() => entregarPaquete(p.id)}
-                    className="rounded-xl bg-slate-700 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                    className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                   >
                     Entregar
                   </button>
@@ -889,26 +888,26 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Historial de hoy */}
-        <section className="mt-6 mb-6 break-inside-avoid">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">
+        <section className="mt-6 mb-6">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">
             Historial de hoy <span className="text-slate-400 font-medium">({historial.length})</span>
           </h2>
           {historial.length === 0 ? (
-            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+            <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
               Aún no hay entradas registradas hoy.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {historial.map((h) => (
                 <li
                   key={h.id}
                   className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">
+                    <p className="text-lg font-semibold text-slate-800 truncate">
                       {h.nombre} · Casa {h.house?.numero ?? "—"}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-base text-slate-500">
                       {h.fecha_hora_entrada ? `Entró ${hora(h.fecha_hora_entrada)}` : "—"}
                       {h.fecha_hora_salida ? ` · Salió ${hora(h.fecha_hora_salida)}` : ""}
                       {h.plate_detected ? ` · 🚘 ${h.plate_detected}` : ""}
@@ -920,7 +919,7 @@ export default function VigilanciaPage() {
                         href={h.foto_identificacion_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-base"
+                        className="text-2xl"
                         title="Ver INE"
                       >
                         🪪
@@ -931,14 +930,14 @@ export default function VigilanciaPage() {
                         href={h.foto_placas_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-base"
+                        className="text-2xl"
                         title="Ver placas"
                       >
                         🚗
                       </a>
                     )}
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
                         h.estado === "adentro"
                           ? "bg-emerald-50 text-emerald-700"
                           : "bg-slate-100 text-slate-500"
@@ -952,7 +951,6 @@ export default function VigilanciaPage() {
             </ul>
           )}
         </section>
-        </div>
       </div>
     </main>
   );
