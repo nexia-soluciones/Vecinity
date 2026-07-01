@@ -66,6 +66,17 @@ type CasaDir = {
   tel_3: string | null;
 };
 type Moroso = { id: string; numero: string; propietario: string | null; saldo: number };
+type SosActivo = {
+  id: string;
+  lat: number | null;
+  lng: number | null;
+  mode: string | null;
+  activated_at: string;
+  attended_by: string | null;
+  autor: { nombre: string } | null;
+  casa: { numero: string } | null;
+  atendio: { nombre: string } | null;
+};
 
 const GENERALES = [
   { key: "alberca", label: "Alberca", emoji: "🏊" },
@@ -93,6 +104,7 @@ export default function VigilanciaPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
   const [historial, setHistorial] = useState<HistVisita[]>([]);
+  const [sosActivos, setSosActivos] = useState<SosActivo[]>([]);
 
   // Registro manual de visita en caseta (walk-in)
   const [mvOpen, setMvOpen] = useState(false);
@@ -223,6 +235,29 @@ export default function VigilanciaPage() {
     setActivos((act as unknown as ExtSvc[]) ?? []);
   }, []);
 
+  const cargarSos = useCallback(async () => {
+    const { data } = await supabaseBrowser
+      .from("sos_events")
+      .select(
+        "id, lat, lng, mode, activated_at, attended_by, " +
+          "autor:profiles!sos_events_profile_id_fkey(nombre), " +
+          "casa:houses(numero), atendio:profiles!sos_events_attended_by_fkey(nombre)"
+      )
+      .eq("is_active", true)
+      .order("activated_at", { ascending: false });
+    setSosActivos((data as unknown as SosActivo[]) ?? []);
+  }, []);
+
+  async function atenderSos(id: string) {
+    await supabaseBrowser.rpc("atender_sos", { p_id: id });
+    await cargarSos();
+  }
+
+  async function cerrarSos(id: string) {
+    await supabaseBrowser.rpc("cerrar_sos", { p_id: id });
+    await cargarSos();
+  }
+
   const cargarMorosos = useCallback(async () => {
     // Solo casas con adeudo arriba del umbral; las que ya tienen convenio de pago no se restringen.
     const { data } = await supabaseBrowser
@@ -235,10 +270,11 @@ export default function VigilanciaPage() {
     setMorosos((data as unknown as Moroso[]) ?? []);
   }, []);
 
-  // Hidratar los conos guardados en este dispositivo
+  // Hidratar los conos guardados en este dispositivo (localStorage; efecto para evitar mismatch de SSR)
   useEffect(() => {
     try {
       const raw = localStorage.getItem("vigilancia_conos");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setConos(JSON.parse(raw));
     } catch {
       /* ignore */
@@ -339,10 +375,29 @@ export default function VigilanciaPage() {
         cargarRecurrentes(),
         cargarHistorial(),
         cargarMorosos(),
+        cargarSos(),
       ]);
       setReady(true);
     })();
-  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes, cargarHistorial, cargarMorosos]);
+  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes, cargarHistorial, cargarMorosos, cargarSos]);
+
+  // SOS en vivo: realtime (instantáneo) + sondeo cada 20s como respaldo
+  useEffect(() => {
+    if (!coloniaId) return;
+    const ch = supabaseBrowser
+      .channel("sos-vigilancia")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "vecino", table: "sos_events" },
+        () => cargarSos()
+      )
+      .subscribe();
+    const iv = setInterval(cargarSos, 20000);
+    return () => {
+      supabaseBrowser.removeChannel(ch);
+      clearInterval(iv);
+    };
+  }, [coloniaId, cargarSos]);
 
   async function subirFoto(file: File, sub: string): Promise<string | null> {
     if (!coloniaId) return null;
@@ -559,6 +614,59 @@ export default function VigilanciaPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Vigilancia</h1>
+
+        {/* 🚨 SOS activos — banner prioritario hasta arriba */}
+        {sosActivos.length > 0 && (
+          <section className="mt-4 rounded-3xl bg-red-600 text-white p-4 shadow-xl ring-4 ring-red-300">
+            <h2 className="text-xl font-extrabold flex items-center gap-2">
+              🚨 SOS activo{sosActivos.length > 1 ? `s (${sosActivos.length})` : ""}
+              <span className="text-xs font-bold bg-white/25 rounded-full px-2 py-0.5 animate-pulse">
+                ● EN VIVO
+              </span>
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {sosActivos.map((s) => (
+                <li key={s.id} className="bg-white/10 rounded-2xl p-3">
+                  <p className="text-lg font-extrabold">
+                    {s.autor?.nombre ?? "Un vecino"}
+                    {s.casa?.numero ? ` · Casa ${s.casa.numero}` : ""}
+                  </p>
+                  <p className="text-base text-white/90">
+                    {hora(s.activated_at)}
+                    {s.mode === "silent" ? " · ⚠️ silencioso" : ""}
+                    {s.atendio?.nombre ? ` · Atendiendo: ${s.atendio.nombre}` : ""}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {s.lat != null && s.lng != null && (
+                      <a
+                        href={`https://maps.google.com/?q=${s.lat},${s.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-xl bg-white text-red-700 text-base font-bold px-4 py-2"
+                      >
+                        📍 Ver ubicación
+                      </a>
+                    )}
+                    {!s.attended_by && (
+                      <button
+                        onClick={() => atenderSos(s.id)}
+                        className="rounded-xl bg-amber-400 text-red-900 text-base font-bold px-4 py-2 hover:bg-amber-300"
+                      >
+                        Atender
+                      </button>
+                    )}
+                    <button
+                      onClick={() => cerrarSos(s.id)}
+                      className="rounded-xl bg-white/20 text-white text-base font-bold px-4 py-2 hover:bg-white/30"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Turno */}
         <div

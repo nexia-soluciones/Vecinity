@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 type Profile = {
@@ -20,12 +20,32 @@ type Pending = { id: string; nombre: string; email: string; created_at: string }
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
+// Tiempo que hay que mantener presionado el SOS para activarlo (evita disparos accidentales)
+const SOS_HOLD_MS = 2500;
+
+// Captura la ubicación del dispositivo; si se niega o no hay GPS, devuelve null (no bloquea la alerta)
+function getCoords(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  });
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [house, setHouse] = useState<House | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
-  const [sosSent, setSosSent] = useState(false);
+  const [sosState, setSosState] = useState<"idle" | "holding" | "sending" | "sent" | "error">(
+    "idle"
+  );
+  const [holdPct, setHoldPct] = useState(0);
+  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStart = useRef(0);
   const [ready, setReady] = useState(false);
 
   const isAdmin = profile?.role === "admin" || profile?.role === "comite";
@@ -73,17 +93,57 @@ export default function Dashboard() {
     })();
   }, [router, loadPending]);
 
-  async function activarSOS() {
+  const dispararSOS = useCallback(async () => {
     if (!profile?.colonia_id) return;
-    await supabaseBrowser.from("sos_events").insert({
+    setSosState("sending");
+    const coords = await getCoords();
+    const { error } = await supabaseBrowser.from("sos_events").insert({
       colonia_id: profile.colonia_id,
       profile_id: profile.id,
       house_id: profile.house_id,
       mode: "loud",
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
     });
-    setSosSent(true);
-    setTimeout(() => setSosSent(false), 4000);
+    if (error) {
+      setSosState("error");
+      return;
+    }
+    setSosState("sent");
+    setTimeout(() => setSosState("idle"), 6000);
+  }, [profile]);
+
+  function clearHold() {
+    if (holdTimer.current) {
+      clearInterval(holdTimer.current);
+      holdTimer.current = null;
+    }
   }
+
+  function startHold() {
+    if (sosState === "sending" || sosState === "sent") return;
+    setSosState("holding");
+    setHoldPct(0);
+    holdStart.current = Date.now();
+    holdTimer.current = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - holdStart.current) / SOS_HOLD_MS) * 100);
+      setHoldPct(pct);
+      if (pct >= 100) {
+        clearHold();
+        setHoldPct(0);
+        dispararSOS();
+      }
+    }, 50);
+  }
+
+  function cancelHold() {
+    clearHold();
+    setSosState((s) => (s === "holding" ? "idle" : s));
+    setHoldPct(0);
+  }
+
+  // Limpia el temporizador si el componente se desmonta a medio hold
+  useEffect(() => () => clearHold(), []);
 
   async function resolver(id: string, status: "aprobado" | "rechazado") {
     await supabaseBrowser
@@ -178,12 +238,34 @@ export default function Dashboard() {
           <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
         </div>
 
-        {/* Botón SOS */}
+        {/* Botón SOS — mantener presionado para activar */}
         <button
-          onClick={activarSOS}
-          className="mt-5 rounded-3xl bg-gradient-to-br from-red-500 to-red-600 text-white py-5 font-extrabold text-lg shadow-lg active:scale-[0.99] transition"
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+          onContextMenu={(e) => e.preventDefault()}
+          disabled={sosState === "sending" || sosState === "sent"}
+          className="relative overflow-hidden mt-5 rounded-3xl bg-gradient-to-br from-red-500 to-red-600 text-white py-5 font-extrabold text-lg shadow-lg select-none touch-none active:scale-[0.99] transition disabled:opacity-95"
         >
-          {sosSent ? "🚨 SOS enviado al comité" : "🆘 Botón de pánico (SOS)"}
+          {sosState === "holding" && (
+            <span
+              className="absolute inset-y-0 left-0 bg-red-800/50"
+              style={{ width: `${holdPct}%` }}
+              aria-hidden
+            />
+          )}
+          <span className="relative">
+            {sosState === "sent"
+              ? "🚨 SOS enviado — viene ayuda"
+              : sosState === "sending"
+              ? "Enviando alerta…"
+              : sosState === "error"
+              ? "⚠️ No se envió — mantén presionado de nuevo"
+              : sosState === "holding"
+              ? "Sigue presionando para enviar…"
+              : "🆘 Botón de pánico — mantén presionado"}
+          </span>
         </button>
 
         {/* Panel comité — aprobaciones */}
