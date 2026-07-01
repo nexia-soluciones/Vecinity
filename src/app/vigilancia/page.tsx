@@ -120,6 +120,7 @@ export default function VigilanciaPage() {
   const [scanPlaca, setScanPlaca] = useState<File | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const scannerRef = useRef<Html5QrcodeType | null>(null);
+  const editandoRef = useRef(false);
 
   // Registro manual de visita en caseta (walk-in)
   const [mvOpen, setMvOpen] = useState(false);
@@ -530,6 +531,47 @@ export default function VigilanciaPage() {
     };
   }, [coloniaId, cargarSos]);
 
+  // ¿El guardia está a media captura? Entonces NO auto-refrescar (para no perder su trabajo).
+  const editando =
+    mvOpen ||
+    showAdd ||
+    scanOpen ||
+    conoFor !== null ||
+    dirCasa !== null ||
+    mvBusy ||
+    scanBusy ||
+    dirBusy ||
+    mvNombre.trim() !== "" ||
+    mvCasa.trim() !== "" ||
+    mvPlaca.trim() !== "" ||
+    npNombre.trim() !== "" ||
+    npCasa.trim() !== "" ||
+    pkgCasa.trim() !== "" ||
+    pkgRem.trim() !== "" ||
+    placaQ.trim() !== "" ||
+    dirQ.trim() !== "" ||
+    Object.keys(ineStaged).length > 0 ||
+    Object.keys(staged).length > 0;
+
+  useEffect(() => {
+    editandoRef.current = editando;
+  }, [editando]);
+
+  // Auto-refresco del tablero: cada 25s trae visitas/reservas/paquetes nuevos SIN recargar la
+  // página (React conserva los formularios). Se salta el tick si el guardia está capturando algo.
+  useEffect(() => {
+    if (!coloniaId) return;
+    const iv = setInterval(() => {
+      if (editandoRef.current) return;
+      cargarVisitas();
+      cargarReservas();
+      cargarPaquetes();
+      cargarRecurrentes();
+      cargarHistorial();
+    }, 25000);
+    return () => clearInterval(iv);
+  }, [coloniaId, cargarVisitas, cargarReservas, cargarPaquetes, cargarRecurrentes, cargarHistorial]);
+
   async function subirFoto(file: File, sub: string): Promise<string | null> {
     if (!coloniaId) return null;
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -745,6 +787,11 @@ export default function VigilanciaPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Vigilancia</h1>
+        <p className="text-xs text-slate-400 mt-0.5">
+          {editando
+            ? "⏸ Actualización en pausa mientras capturas"
+            : "🔄 Se actualiza solo — no necesitas refrescar"}
+        </p>
 
         {/* 🚨 SOS activos — banner prioritario hasta arriba */}
         {sosActivos.length > 0 && (
