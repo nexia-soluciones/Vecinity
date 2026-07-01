@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { leerPlaca } from "./actions";
 
@@ -105,6 +106,20 @@ export default function VigilanciaPage() {
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
   const [historial, setHistorial] = useState<HistVisita[]>([]);
   const [sosActivos, setSosActivos] = useState<SosActivo[]>([]);
+
+  // Escáner de pase QR
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [scanVisit, setScanVisit] = useState<{
+    id: string;
+    nombre: string;
+    estado: string;
+    casa: string | null;
+  } | null>(null);
+  const [scanIne, setScanIne] = useState<File | null>(null);
+  const [scanPlaca, setScanPlaca] = useState<File | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+  const scannerRef = useRef<Html5QrcodeType | null>(null);
 
   // Registro manual de visita en caseta (walk-in)
   const [mvOpen, setMvOpen] = useState(false);
@@ -257,6 +272,122 @@ export default function VigilanciaPage() {
     await supabaseBrowser.rpc("cerrar_sos", { p_id: id });
     await cargarSos();
   }
+
+  // --- Escáner de pase QR ---
+  function extraerToken(text: string): string | null {
+    // El QR codifica la URL .../visita/<token>; aceptar URL completa o token crudo
+    try {
+      const u = new URL(text);
+      const parts = u.pathname.split("/").filter(Boolean);
+      const i = parts.indexOf("visita");
+      if (i >= 0 && parts[i + 1]) return parts[i + 1];
+    } catch {
+      /* no es URL */
+    }
+    return text.trim() || null;
+  }
+
+  async function pararScanner() {
+    const inst = scannerRef.current;
+    scannerRef.current = null;
+    if (inst) {
+      try {
+        await inst.stop();
+        inst.clear();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  async function onScan(text: string) {
+    const token = extraerToken(text);
+    if (!token) return setScanMsg("QR no reconocido.");
+    await pararScanner();
+    const { data } = await supabaseBrowser
+      .from("visitors")
+      .select("id, nombre, estado, house:houses(numero)")
+      .eq("token_acceso", token)
+      .maybeSingle();
+    const v = data as unknown as
+      | { id: string; nombre: string; estado: string; house: { numero: string } | null }
+      | null;
+    if (!v) return setScanMsg("Ese pase no corresponde a ninguna visita registrada.");
+    setScanMsg(null);
+    setScanVisit({ id: v.id, nombre: v.nombre, estado: v.estado, casa: v.house?.numero ?? null });
+  }
+
+  function abrirScan() {
+    setScanVisit(null);
+    setScanIne(null);
+    setScanPlaca(null);
+    setScanMsg(null);
+    setScanOpen(true);
+  }
+
+  function cerrarScan() {
+    pararScanner();
+    setScanOpen(false);
+    setScanVisit(null);
+    setScanIne(null);
+    setScanPlaca(null);
+    setScanMsg(null);
+  }
+
+  async function entradaDesdeScan() {
+    if (!scanVisit) return;
+    setScanBusy(true);
+    try {
+      const ineUrl = scanIne ? await subirFoto(scanIne, "visitas") : null;
+      const placaUrl = scanPlaca ? await subirFoto(scanPlaca, "visitas") : null;
+      if (ineUrl || placaUrl) {
+        await supabaseBrowser.rpc("adjuntar_fotos_visita", {
+          p_id: scanVisit.id,
+          p_foto_ine_url: ineUrl,
+          p_foto_placa_url: placaUrl,
+        });
+      }
+      await supabaseBrowser.rpc("marcar_entrada_visita", { p_id: scanVisit.id });
+      await Promise.all([cargarVisitas(), cargarHistorial()]);
+      cerrarScan();
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  async function salidaDesdeScan() {
+    if (!scanVisit) return;
+    setScanBusy(true);
+    try {
+      await supabaseBrowser.rpc("marcar_salida_visita", { p_id: scanVisit.id });
+      await Promise.all([cargarVisitas(), cargarHistorial()]);
+      cerrarScan();
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  // Arranca la cámara cuando el escáner está abierto y aún no hay visita resuelta
+  useEffect(() => {
+    if (!scanOpen || scanVisit) return;
+    let cancelado = false;
+    (async () => {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (cancelado) return;
+      const inst = new Html5Qrcode("qr-reader");
+      scannerRef.current = inst;
+      try {
+        await inst.start({ facingMode: "environment" }, { fps: 10, qrbox: 240 }, onScan, () => {});
+      } catch {
+        setScanMsg("No se pudo abrir la cámara. Revisa los permisos del navegador.");
+      }
+    })();
+    return () => {
+      cancelado = true;
+      pararScanner();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanOpen, scanVisit]);
 
   const cargarMorosos = useCallback(async () => {
     // Solo casas con adeudo arriba del umbral; las que ya tienen convenio de pago no se restringen.
@@ -685,6 +816,14 @@ export default function VigilanciaPage() {
             {turnoId ? "Cerrar turno" : "Iniciar turno"}
           </button>
         </div>
+
+        {/* Escanear pase QR de una visita */}
+        <button
+          onClick={abrirScan}
+          className="mt-4 w-full rounded-2xl bg-brand-500 text-white font-bold text-lg py-4 shadow-lg hover:bg-brand-600 active:scale-[0.99] transition flex items-center justify-center gap-2"
+        >
+          📷 Escanear pase QR
+        </button>
 
         {/* Secciones en stack vertical; las tarjetas de cada sección llenan el ancho en tablet */}
         {/* Buscar placa */}
@@ -1284,6 +1423,93 @@ export default function VigilanciaPage() {
           </section>
         )}
       </div>
+
+      {scanOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5"
+          onClick={cerrarScan}
+        >
+          <div
+            className="bg-white rounded-2xl p-5 w-full max-w-md flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!scanVisit ? (
+              <>
+                <h3 className="text-xl font-bold text-slate-800">Escanear pase QR</h3>
+                <p className="text-base text-slate-500">
+                  Apunta la cámara al código QR del visitante.
+                </p>
+                <div id="qr-reader" className="w-full overflow-hidden rounded-xl bg-slate-900" />
+                {scanMsg && <p className="text-base text-red-600">{scanMsg}</p>}
+                <button
+                  onClick={cerrarScan}
+                  className="rounded-xl bg-slate-100 text-slate-600 text-base font-semibold py-2.5"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold text-slate-800">{scanVisit.nombre}</h3>
+                <p className="text-base text-slate-500">
+                  Casa {scanVisit.casa ?? "—"} · {scanVisit.estado}
+                </p>
+                {scanVisit.estado === "esperando" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-base text-slate-500">
+                        Foto INE
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => setScanIne(e.target.files?.[0] ?? null)}
+                          className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                        />
+                      </label>
+                      <label className="text-base text-slate-500">
+                        Foto placas
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => setScanPlaca(e.target.files?.[0] ?? null)}
+                          className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                        />
+                      </label>
+                    </div>
+                    <button
+                      onClick={entradaDesdeScan}
+                      disabled={scanBusy}
+                      className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+                    >
+                      {scanBusy ? "Registrando…" : "✓ Marcar entrada"}
+                    </button>
+                  </>
+                ) : scanVisit.estado === "adentro" ? (
+                  <button
+                    onClick={salidaDesdeScan}
+                    disabled={scanBusy}
+                    className="rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    {scanBusy ? "Registrando…" : "Marcar salida"}
+                  </button>
+                ) : (
+                  <p className="text-base text-slate-500 bg-slate-50 rounded-xl p-3">
+                    Esta visita ya está finalizada.
+                  </p>
+                )}
+                <button
+                  onClick={cerrarScan}
+                  className="rounded-xl bg-slate-100 text-slate-600 text-base font-semibold py-2.5"
+                >
+                  Cerrar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {conoFor && (
         <div
