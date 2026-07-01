@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [ready, setReady] = useState(false);
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
+  const [noLeidos, setNoLeidos] = useState(0);
 
   const isAdmin = profile?.role === "admin" || profile?.role === "comite";
 
@@ -92,6 +93,13 @@ export default function Dashboard() {
         setHouse(h as unknown as House | null);
       }
       if (p.role === "admin" || p.role === "comite") await loadPending();
+      // comunicados dirigidos a mi casa sin leer
+      const { count } = await supabaseBrowser
+        .from("comunicados")
+        .select("id", { count: "exact", head: true })
+        .is("leido_at", null)
+        .not("house_id", "is", null);
+      setNoLeidos(count ?? 0);
       setReady(true);
     })();
   }, [router, loadPending]);
@@ -234,6 +242,25 @@ export default function Dashboard() {
             </p>
           </div>
         )}
+
+        {/* Comunicados */}
+        <button
+          onClick={() => router.push("/dashboard/comunicados")}
+          className="mt-5 w-full rounded-3xl bg-white ring-1 ring-purple-200 p-4 flex items-center gap-3 text-left hover:ring-purple-300 transition shadow-sm"
+        >
+          <span className="text-3xl">📣</span>
+          <span>
+            <span className="block font-bold text-slate-800">Comunicados</span>
+            <span className="block text-xs text-slate-500">Avisos del comité y de Caty</span>
+          </span>
+          {noLeidos > 0 ? (
+            <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full px-2.5 py-1">
+              {noLeidos}
+            </span>
+          ) : (
+            <span className="ml-auto text-nexia text-xl">›</span>
+          )}
+        </button>
 
         {/* Reservar áreas comunes (función activa) */}
         <button
