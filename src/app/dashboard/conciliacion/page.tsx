@@ -14,7 +14,8 @@ type Ingreso = {
   refKey: string;
   hash: string;
   casa: string; // número de casa (editable)
-  sugerida: boolean; // vino del mapa aprendido
+  sugerida: boolean; // vino del mapa aprendido o del concepto
+  conf: "alta" | "media" | null; // confianza de la casa extraída del concepto
   incluir: boolean;
   dup: boolean;
   estado: "" | "ok" | "dup" | "error";
@@ -25,6 +26,32 @@ const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
 const normRef = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
+
+// Extrae el número de casa del concepto del banco (los vecinos escriben C152,
+// CASA 220, "mtto casa 184", o el número al final). Valida SIEMPRE contra las
+// casas reales (todas de 3 dígitos, 100-258), así los números de cuenta/rastreo
+// (10 díg.) y los códigos de banco (014, 002…) nunca cuelan.
+//   conf 'alta'  = patrón explícito C###/CASA### → seguro para auto-conciliar.
+//   conf 'media' = número de casa válido suelto en el texto → sugerencia a confirmar.
+function extraerCasa(concepto: string, casasSet: Set<string>): { casa: string | null; conf: "alta" | "media" | null } {
+  const limpio = String(concepto || "").toUpperCase().replace(/\d{4,}/g, " "); // quita cuentas/rastreo largos
+  const valida = (n: string) => {
+    const k = String(parseInt(n, 10));
+    return casasSet.has(k) ? k : null;
+  };
+  const m = limpio.match(/\bCASA\s*(\d{1,3})\b/) || limpio.match(/\bC\s*(\d{1,3})\b/);
+  if (m) {
+    const k = valida(m[1]);
+    if (k) return { casa: k, conf: "alta" };
+  }
+  let last: string | null = null;
+  for (const n of limpio.match(/\b\d{1,3}\b/g) || []) {
+    const k = valida(n);
+    if (k) last = k;
+  }
+  if (last) return { casa: last, conf: "media" };
+  return { casa: null, conf: null };
+}
 
 async function sha256(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -142,6 +169,7 @@ export default function ConciliacionPage() {
         ((existentes as unknown as { banco_hash: string }[]) ?? []).map((e) => e.banco_hash)
       );
 
+      const casasSet = new Set(Object.keys(casas));
       const out: Ingreso[] = [];
       for (let i = hi + 1; i < rows.length; i++) {
         const r = rows[i] as unknown[];
@@ -153,7 +181,9 @@ export default function ConciliacionPage() {
         const saldo = iSaldo >= 0 ? toNum(r[iSaldo]) : 0;
         const refKey = normRef(concepto);
         const hash = await sha256(`${fecha}|${monto}|${concepto}|${saldo}`);
-        const sugeridaNum = refMap[refKey] ?? "";
+        // Casa: primero por el concepto del banco (C###/CASA###), luego el mapa aprendido.
+        const ext = extraerCasa(concepto, casasSet);
+        const sugeridaNum = ext.casa ?? refMap[refKey] ?? "";
         const dup = yaImportados.has(hash);
         out.push({
           key: `${i}-${hash.slice(0, 8)}`,
@@ -164,6 +194,7 @@ export default function ConciliacionPage() {
           hash,
           casa: sugeridaNum,
           sugerida: !!sugeridaNum,
+          conf: ext.conf,
           incluir: !dup,
           dup,
           estado: dup ? "dup" : "",
@@ -194,37 +225,58 @@ export default function ConciliacionPage() {
     setAutoBusy(true);
     setAutoResumen(null);
     let auto = 0,
+      porComprobante = 0,
       pendientes = 0,
       dup = 0;
     const updated = [...ingresos];
     for (let i = 0; i < updated.length; i++) {
       const row = updated[i];
       if (!row.incluir || row.estado === "ok" || row.estado === "dup") continue;
+
+      // 1) match por comprobante que subió el vecino (clave de rastreo). Aprueba SU abono.
       const { data, error } = await supabaseBrowser.rpc("conciliar_auto", {
         p_banco_hash: row.hash,
         p_banco_concepto: row.concepto,
         p_monto: row.monto,
         p_fecha: row.fecha || null,
       });
-      if (error) {
-        pendientes++;
-        continue; // queda para el flujo manual
-      }
       const r = data as { dup?: boolean; matched?: boolean; casa?: string } | null;
-      if (r?.dup) {
+      if (!error && r?.dup) {
         dup++;
         updated[i] = { ...row, estado: "dup", incluir: false };
-      } else if (r?.matched) {
-        auto++;
-        updated[i] = { ...row, estado: "ok", incluir: false, casa: r.casa ?? row.casa, sugerida: false };
-      } else {
-        pendientes++; // no cuadró ningún comprobante → asignación manual
+        continue;
       }
+      if (!error && r?.matched) {
+        porComprobante++;
+        updated[i] = { ...row, estado: "ok", incluir: false, casa: r.casa ?? row.casa, sugerida: false };
+        continue;
+      }
+
+      // 2) sin comprobante: si el concepto del banco identifica la casa con alta
+      //    confianza (C###/CASA###), crea y aprueba el abono para esa casa.
+      const casaId = casas[row.casa.trim()];
+      if (row.conf === "alta" && casaId) {
+        const { error: e2, data: d2 } = await supabaseBrowser.rpc("conciliar_abono", {
+          p_house_id: casaId,
+          p_monto: row.monto,
+          p_concepto: `Pago banco ${row.fecha} · ${row.concepto}`.slice(0, 200),
+          p_banco_hash: row.hash,
+          p_ref_key: row.refKey,
+        });
+        if (!e2 && !(d2 as { dup?: boolean })?.dup) {
+          auto++;
+          updated[i] = { ...row, estado: "ok", incluir: false };
+          continue;
+        }
+      }
+      // 3) casa media/dudosa → queda pre-llenada para que el comité confirme
+      pendientes++;
     }
     setIngresos(updated);
     setAutoBusy(false);
     setAutoResumen(
-      `Auto-conciliados: ${auto} · por asignar a mano: ${pendientes} · ya importados: ${dup}.`
+      `Auto-conciliados: ${auto + porComprobante} (${porComprobante} por comprobante, ${auto} por concepto) · ` +
+        `por confirmar a mano: ${pendientes} · ya importados: ${dup}.`
     );
     await cargarMapas();
   }
@@ -316,10 +368,11 @@ export default function ConciliacionPage() {
           <>
             {/* Auto-conciliación por comprobante (OCR) */}
             <section className="mt-3 bg-purple-50 ring-1 ring-purple-100 rounded-2xl p-4">
-              <p className="text-sm font-semibold text-slate-700">✨ Auto-conciliar con comprobantes</p>
+              <p className="text-sm font-semibold text-slate-700">✨ Auto-conciliar</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Cruza la clave de rastreo del banco con los comprobantes que subieron los vecinos.
-                Lo que cuadra se aprueba solo; lo demás lo asignas abajo.
+                Identifica la casa por el concepto del banco (C152, casa 220…) y por los
+                comprobantes que subieron los vecinos. Lo seguro se aprueba solo; las casas
+                sugeridas quedan pre-llenadas abajo para que las confirmes.
               </p>
               <button
                 onClick={autoConciliar}
