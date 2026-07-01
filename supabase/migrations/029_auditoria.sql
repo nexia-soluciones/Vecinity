@@ -16,13 +16,14 @@ AS $$
 BEGIN
   IF NOT vecino.is_admin() THEN RAISE EXCEPTION 'Solo el comité.'; END IF;
   RETURN QUERY
-    SELECT h.numero::text, t.concepto, t.monto, t.created_at::date,
+    SELECT h.numero::text, t.concepto, t.monto,
+           (t.created_at AT TIME ZONE 'America/Mexico_City')::date,
            count(*), array_agg(t.id ORDER BY t.created_at)
     FROM vecino.transactions t
     JOIN vecino.houses h ON h.id = t.house_id
     WHERE t.tipo = 'abono' AND t.estado = 'aprobado'
       AND h.colonia_id = vecino.my_colonia_id()
-    GROUP BY h.numero, t.concepto, t.monto, t.created_at::date
+    GROUP BY h.numero, t.concepto, t.monto, (t.created_at AT TIME ZONE 'America/Mexico_City')::date
     HAVING count(*) > 1
     ORDER BY count(*) DESC, h.numero;
 END $$;
