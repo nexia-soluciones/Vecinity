@@ -123,7 +123,6 @@ export default function VigilanciaPage() {
   const editandoRef = useRef(false);
 
   // Registro manual de visita en caseta (walk-in)
-  const [mvOpen, setMvOpen] = useState(false);
   const [mvNombre, setMvNombre] = useState("");
   const [mvCasa, setMvCasa] = useState("");
   const [mvPlaca, setMvPlaca] = useState("");
@@ -533,7 +532,6 @@ export default function VigilanciaPage() {
 
   // ¿El guardia está a media captura? Entonces NO auto-refrescar (para no perder su trabajo).
   const editando =
-    mvOpen ||
     showAdd ||
     scanOpen ||
     conoFor !== null ||
@@ -712,7 +710,6 @@ export default function VigilanciaPage() {
     setMvPlaca("");
     setMvIne(null);
     setMvPlacaFoto(null);
-    setMvOpen(false);
     await Promise.all([cargarVisitas(), cargarHistorial()]);
   }
 
@@ -872,9 +869,67 @@ export default function VigilanciaPage() {
           📷 Escanear pase QR
         </button>
 
+        {/* Registrar visita en caseta — bloque independiente (lo más usado) */}
+        <section className="mt-4 rounded-3xl bg-brand-50 ring-1 ring-brand-200 p-4 shadow-sm">
+          <h2 className="text-lg font-bold text-brand-700 mb-1">🪪 Registrar visita en caseta</h2>
+          <p className="text-base text-slate-500 mb-2">Para una visita que llega sin pase QR.</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                value={mvNombre}
+                onChange={(e) => setMvNombre(e.target.value)}
+                placeholder="Nombre del visitante"
+                className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+              />
+              <input
+                value={mvCasa}
+                onChange={(e) => setMvCasa(e.target.value)}
+                placeholder="Casa"
+                className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+              />
+            </div>
+            <input
+              value={mvPlaca}
+              onChange={(e) => setMvPlaca(e.target.value.toUpperCase())}
+              placeholder="Placa (opcional)"
+              className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-base text-slate-500">
+                Foto INE
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setMvIne(e.target.files?.[0] ?? null)}
+                  className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-100 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                />
+              </label>
+              <label className="text-base text-slate-500">
+                Foto placas
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setMvPlacaFoto(e.target.files?.[0] ?? null)}
+                  className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-100 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
+                />
+              </label>
+            </div>
+            {mvMsg && <p className="text-base text-red-600">{mvMsg}</p>}
+            <button
+              onClick={registrarVisitaManual}
+              disabled={mvBusy}
+              className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+            >
+              {mvBusy ? "Registrando…" : "Registrar entrada"}
+            </button>
+          </div>
+        </section>
+
         {/* Secciones en stack vertical; las tarjetas de cada sección llenan el ancho en tablet */}
         {/* Buscar placa */}
-        <section className="mt-5">
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">Buscar placa</h2>
           <div className="flex gap-2">
             <input
@@ -911,7 +966,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Directorio de teléfonos */}
-        <section className="mt-6">
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">Directorio</h2>
           <div className="flex gap-2">
             <input
@@ -968,74 +1023,10 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Visitas */}
-        <section className="mt-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-bold text-slate-700">
-              Visitas <span className="text-slate-400 font-medium">({visitas.length})</span>
-            </h2>
-            <button
-              onClick={() => setMvOpen((v) => !v)}
-              className="text-base text-brand-600 font-semibold"
-            >
-              {mvOpen ? "Cerrar" : "+ En caseta"}
-            </button>
-          </div>
-
-          {mvOpen && (
-            <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3 mb-2 flex flex-col gap-2">
-              <p className="text-base text-slate-500">Registrar visita que llega sin pase</p>
-              <div className="flex gap-2">
-                <input
-                  value={mvNombre}
-                  onChange={(e) => setMvNombre(e.target.value)}
-                  placeholder="Nombre del visitante"
-                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-                />
-                <input
-                  value={mvCasa}
-                  onChange={(e) => setMvCasa(e.target.value)}
-                  placeholder="Casa"
-                  className="w-20 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-                />
-              </div>
-              <input
-                value={mvPlaca}
-                onChange={(e) => setMvPlaca(e.target.value.toUpperCase())}
-                placeholder="Placa (opcional)"
-                className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-base text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-base text-slate-500">
-                  Foto INE
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => setMvIne(e.target.files?.[0] ?? null)}
-                    className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
-                  />
-                </label>
-                <label className="text-base text-slate-500">
-                  Foto placas
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => setMvPlacaFoto(e.target.files?.[0] ?? null)}
-                    className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
-                  />
-                </label>
-              </div>
-              {mvMsg && <p className="text-base text-red-600">{mvMsg}</p>}
-              <button
-                onClick={registrarVisitaManual}
-                disabled={mvBusy}
-                className="rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
-              >
-                {mvBusy ? "Registrando…" : "Registrar entrada"}
-              </button>
-            </div>
-          )}
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
+          <h2 className="text-lg font-bold text-slate-700 mb-2">
+            Visitas en espera <span className="text-slate-400 font-medium">({visitas.length})</span>
+          </h2>
 
           {visitas.length === 0 ? (
             <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
@@ -1116,7 +1107,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Reservas (ciclo de llave) */}
-        <section className="mt-6">
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">
             Reservas de hoy <span className="text-slate-400 font-medium">({reservas.length})</span>
           </h2>
@@ -1161,7 +1152,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Servicios de la villa */}
-        <section className="mt-6">
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">Servicios de la villa</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {GENERALES.map((g) => {
@@ -1191,7 +1182,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Servicios recurrentes (domésticos) */}
-        <section className="mt-6">
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-slate-700">
               Recurrentes <span className="text-slate-400 font-medium">({providers.length})</span>
@@ -1323,7 +1314,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Paquetes */}
-        <section className="mt-6 mb-4">
+        <section className="mt-4 mb-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">
             Paquetes <span className="text-slate-400 font-medium">({paquetes.length})</span>
           </h2>
@@ -1374,7 +1365,7 @@ export default function VigilanciaPage() {
         </section>
 
         {/* Historial de hoy */}
-        <section className="mt-6 mb-6">
+        <section className="mt-4 mb-6 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
           <h2 className="text-lg font-bold text-slate-700 mb-2">
             Historial de hoy <span className="text-slate-400 font-medium">({historial.length})</span>
           </h2>
@@ -1440,7 +1431,7 @@ export default function VigilanciaPage() {
 
         {/* Servicios restringidos (morosos) — al final del dashboard */}
         {morosos.length > 0 && (
-          <section className="mt-6 mb-6">
+          <section className="mt-4 mb-6">
             <h2 className="text-lg font-bold text-red-700 mb-2">
               Servicios restringidos{" "}
               <span className="text-red-400 font-medium">({morosos.length})</span>
