@@ -58,6 +58,8 @@ export default function ConciliacionPage() {
   const [fileMsg, setFileMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resumen, setResumen] = useState<string | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoResumen, setAutoResumen] = useState<string | null>(null);
 
   const cargarMapas = useCallback(async () => {
     const { data: hs } = await supabaseBrowser.from("houses").select("id, numero");
@@ -185,6 +187,48 @@ export default function ConciliacionPage() {
     setIngresos((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
+  // Auto-conciliación: cruza cada fila del banco contra los comprobantes con OCR
+  // (por clave de rastreo). Lo que cuadra se auto-aprueba y reconoce la casa solo;
+  // lo demás queda para asignar a mano abajo.
+  async function autoConciliar() {
+    setAutoBusy(true);
+    setAutoResumen(null);
+    let auto = 0,
+      pendientes = 0,
+      dup = 0;
+    const updated = [...ingresos];
+    for (let i = 0; i < updated.length; i++) {
+      const row = updated[i];
+      if (!row.incluir || row.estado === "ok" || row.estado === "dup") continue;
+      const { data, error } = await supabaseBrowser.rpc("conciliar_auto", {
+        p_banco_hash: row.hash,
+        p_banco_concepto: row.concepto,
+        p_monto: row.monto,
+        p_fecha: row.fecha || null,
+      });
+      if (error) {
+        pendientes++;
+        continue; // queda para el flujo manual
+      }
+      const r = data as { dup?: boolean; matched?: boolean; casa?: string } | null;
+      if (r?.dup) {
+        dup++;
+        updated[i] = { ...row, estado: "dup", incluir: false };
+      } else if (r?.matched) {
+        auto++;
+        updated[i] = { ...row, estado: "ok", incluir: false, casa: r.casa ?? row.casa, sugerida: false };
+      } else {
+        pendientes++; // no cuadró ningún comprobante → asignación manual
+      }
+    }
+    setIngresos(updated);
+    setAutoBusy(false);
+    setAutoResumen(
+      `Auto-conciliados: ${auto} · por asignar a mano: ${pendientes} · ya importados: ${dup}.`
+    );
+    await cargarMapas();
+  }
+
   async function conciliar() {
     setBusy(true);
     setResumen(null);
@@ -270,6 +314,23 @@ export default function ConciliacionPage() {
 
         {ingresos.length > 0 && (
           <>
+            {/* Auto-conciliación por comprobante (OCR) */}
+            <section className="mt-3 bg-purple-50 ring-1 ring-purple-100 rounded-2xl p-4">
+              <p className="text-sm font-semibold text-slate-700">✨ Auto-conciliar con comprobantes</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cruza la clave de rastreo del banco con los comprobantes que subieron los vecinos.
+                Lo que cuadra se aprueba solo; lo demás lo asignas abajo.
+              </p>
+              <button
+                onClick={autoConciliar}
+                disabled={autoBusy}
+                className="mt-2 rounded-xl bg-nexia text-white text-sm font-semibold px-4 py-2 hover:opacity-90 disabled:opacity-40"
+              >
+                {autoBusy ? "Conciliando…" : "Auto-conciliar"}
+              </button>
+              {autoResumen && <p className="text-xs text-slate-600 mt-2">{autoResumen}</p>}
+            </section>
+
             {/* Acción */}
             <div className="mt-4 sticky top-2 z-10 bg-gradient-to-br from-brand-500 to-emerald-600 text-white rounded-2xl p-4 shadow-lg">
               <div className="flex items-center justify-between">

@@ -720,7 +720,8 @@ export default function VigilanciaPage() {
     // OCR de la placa con IA (si hay foto de placas)
     const newId = (regData as { id?: string } | null)?.id;
     if (newId && placaUrl) {
-      const ocr = await leerPlaca(placaUrl);
+      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token ?? "";
+      const ocr = await leerPlaca(token, placaUrl);
       if (ocr.ok && ocr.plate) {
         await supabaseBrowser.rpc("set_visita_plate", {
           p_id: newId,

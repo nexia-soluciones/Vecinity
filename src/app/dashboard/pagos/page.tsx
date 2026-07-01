@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
+import { leerComprobante } from "./actions";
 
 type Mov = {
   id: string;
@@ -128,13 +129,35 @@ export default function PagosPage() {
         if (upErr) throw new Error("No se pudo subir el comprobante.");
         url = supabaseBrowser.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
       }
-      const { error } = await supabaseBrowser.rpc("registrar_abono", {
+      const { data: abData, error } = await supabaseBrowser.rpc("registrar_abono", {
         p_monto: m,
         p_comprobante_url: url,
         p_concepto: "Abono",
         p_comprobante_hash: hash,
       });
       if (error) throw new Error(error.message.replace(/^.*?:\s/, ""));
+      // OCR del comprobante (best-effort): extrae la clave de rastreo para que el
+      // banco lo concilie solo. No bloquea ni falla el abono si el OCR no jala.
+      const nuevoId = (abData as { id?: string } | null)?.id;
+      if (nuevoId && url) {
+        try {
+          const { data: sess } = await supabaseBrowser.auth.getSession();
+          const token = sess.session?.access_token;
+          if (token) {
+            const oc = await leerComprobante(token, url);
+            if (oc.ok) {
+              const ref = oc.data.clave_rastreo || oc.data.folio || null;
+              await supabaseBrowser.rpc("set_abono_ocr", {
+                p_id: nuevoId,
+                p_ocr: oc.data,
+                p_ref: ref,
+              });
+            }
+          }
+        } catch {
+          /* el OCR es opcional; el abono ya quedó registrado */
+        }
+      }
       setOk("Abono enviado. El comité lo revisará.");
       setMonto("");
       setFile(null);

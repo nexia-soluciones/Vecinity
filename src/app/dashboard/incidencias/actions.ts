@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { leerPlacaDeImagen } from "@/lib/ocr";
+import { requireAprobado } from "@/lib/supabase/server-auth";
 
 type Resultado =
   | { ok: true; accion: "amonestacion" | "propuesta" | "ninguna"; monto?: number; placaOcr?: string }
@@ -11,10 +12,16 @@ type Resultado =
 // La API key vive solo en el servidor; el RPC (SECURITY DEFINER, service role)
 // hace la validación de 3 vías y crea amonestación o propuesta de multa.
 export async function autoprocesarIncidencia(
+  token: string,
   incidentId: string,
   placaReportada: string,
   evidenciaUrl: string
 ): Promise<Resultado> {
+  try {
+    await requireAprobado(token);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No autorizado." };
+  }
   if (!process.env.ANTHROPIC_API_KEY) return { ok: false, error: "no-key" };
 
   try {

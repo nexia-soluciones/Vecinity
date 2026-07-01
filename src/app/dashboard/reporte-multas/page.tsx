@@ -102,7 +102,8 @@ export default function ReporteMultasPage() {
       lng: m.evidencia_lng,
       descripcion: m.descripcion,
     }));
-    const res = await generarReporteMultas(labelMes(periodo), colonia, filas);
+    const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token ?? "";
+    const res = await generarReporteMultas(token, labelMes(periodo), colonia, filas);
     setGenerando(false);
     if (res.ok) setReporte(res.reporte);
     else setErr(res.error);

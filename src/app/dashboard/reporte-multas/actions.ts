@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { requireAdmin } from "@/lib/supabase/server-auth";
 
 export type FilaMulta = {
   fecha: string; // fecha de resolución (YYYY-MM-DD)
@@ -18,10 +19,16 @@ type Resultado = { ok: true; reporte: string } | { ok: false; error: string };
 // Genera un reporte mensual de multas asistido por Claude.
 // La API key vive solo en el servidor (nunca llega al cliente).
 export async function generarReporteMultas(
+  token: string,
   periodoLabel: string,
   colonia: string,
   filas: FilaMulta[]
 ): Promise<Resultado> {
+  try {
+    await requireAdmin(token);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No autorizado." };
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return {

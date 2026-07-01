@@ -220,7 +220,8 @@ export default function IncidenciasPage() {
       // Si hay placa escrita + foto, verificamos con OCR y auto-procesamos.
       const newId = (repData as { id?: string } | null)?.id;
       if (newId && placa.trim() && url) {
-        const auto = await autoprocesarIncidencia(newId, placa.trim().toUpperCase(), url);
+        const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token ?? "";
+        const auto = await autoprocesarIncidencia(token, newId, placa.trim().toUpperCase(), url);
         if (auto.ok && auto.accion === "amonestacion") {
           okMsg = "✅ Placa verificada por IA. Es la 1ª vez → se envió una amonestación a la casa infractora.";
         } else if (auto.ok && auto.accion === "propuesta") {
