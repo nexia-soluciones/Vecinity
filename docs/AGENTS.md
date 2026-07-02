@@ -2,10 +2,51 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-06-27
+> Última actualización: 2026-07-02
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Resolución oficial de multas + anonimato del reportante (2026-07-02) ✅
+
+**Qué pidió Juan:** que el infractor pueda abrir la **resolución oficial** de su multa
+(foto + artículo del reglamento que falló) desde su estado de cuenta, **sin ver quién lo reportó**.
+
+**Fuga que se cerró:** la RLS de `incident_reports` era colonia-wide (`colonia_id = my_colonia_id()`)
+→ cualquier residente podía leer `reportante_house_id` de CUALQUIER fila (incl. donde era infractor).
+El "anónimo" era solo visual. **Ahora** `incident_reports_read = (colonia AND is_admin) OR reportante = my_house`:
+el residente solo lee directo los reportes que ÉL levantó; como infractor la fila le es invisible y
+el detalle lo obtiene por RPC enmascarado. Verificado simulando al infractor real (Casa 139):
+`filas_como_infractor = 0`, y `ver_resolucion_multa` **nunca** devuelve `reportante_house_id`.
+
+**Piezas (migraciones 033, 033b, 034):**
+- `vecino.reglamento` (113 artículos de Villa Catania sembrados desde el docx del vault). RLS read
+  colonia / write admin. `fine_categories.articulo_id` → mapea cada categoría a su artículo
+  (Estacionamiento→97 sexies, Mascotas→38, Ruido→97, Amenidades→101 bis, Fachada→15, Higiene→24, Basura→36).
+- `incident_reports.resolucion_oficial / articulo_snapshot / resolucion_generada_at`.
+- RPC `ver_resolucion_multa(p_transaction_id)` — SECURITY DEFINER, guard `infractor = my_house OR (is_admin AND colonia)`;
+  devuelve categoría/monto/foto/artículo(literal)/resolución, **omite el reportante**. Localiza por el
+  `transaction_id` del cargo que el residente ve en su estado de cuenta.
+- RPC `set_resolucion_oficial` (service_role) — la escribe la Server Action.
+- **Server Action** `generarResolucionOficial` (`incidencias/resolucion-actions.ts`): Claude (`claude-opus-4-8`)
+  redacta la resolución citando el **texto LITERAL** del artículo (prohibido inventar / mencionar reportante).
+  Se dispara al aprobar la multa (`resolver_incidencia` multar / `votar_resolucion` aprobar), best-effort.
+- **Front residente:** tarjeta de saldo del dashboard → `/dashboard/mi-cuenta` (sus `transactions`, RLS self);
+  cada cargo `Multa:` tiene "📄 Ver resolución" → modal con foto + artículo + resolución. E2E probado:
+  IA generó resolución real de Casa 139 citando Art. 97 sexies textual, sin reportante.
+
+**Tope de multa → CONFIGURABLE** (`colonias.tope_multa` ahora nullable, `NULL = sin límite`).
+Villa Catania quedó en `NULL` porque el **Art. 101 bis dice "NO tiene tope superior"** (multa progresiva
+`base × N`). Antes la app violaba su propio reglamento capando a $1,000. `sugerir_multa` / `resolver_incidencia`
+solo aplican tope si NO es NULL.
+
+**Caveat:** las 218 multas viejas no tienen `evidencia_capturada_at` → la resolución IA usa `created_at`
+como fecha (hora del INSERT, no del hecho). Las multas NUEVAS sí sellan la hora real al reportar. La
+resolución oficial de multas viejas se genera bajo demanda (aún no hay backfill masivo; el artículo + foto
+ya se muestran sin la resolución IA).
+
+**Pendiente menor:** bucket `vecino-evidencias` sigue público (URLs no adivinables). La fuga crítica
+(identidad del reportante) está en la fila, no en la foto, y quedó cerrada. Signed URLs privados = Fase 2.
 
 ## Cutover / lanzamiento a Villa Catania (2026-06-30) 🚀
 Mecanismo de migración de residentes del sistema viejo (Django/PythonAnywhere) a la app nueva, validado en prod.

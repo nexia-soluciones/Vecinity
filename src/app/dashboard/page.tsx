@@ -227,10 +227,11 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Saldo */}
+        {/* Saldo — abre el estado de cuenta del residente */}
         {house && (
-          <div
-            className={`mt-5 rounded-3xl p-5 text-white shadow-lg ${
+          <button
+            onClick={() => router.push("/dashboard/mi-cuenta")}
+            className={`mt-5 w-full text-left rounded-3xl p-5 text-white shadow-lg transition hover:brightness-105 ${
               conAdeudo
                 ? "bg-gradient-to-br from-amber-500 to-orange-600"
                 : "bg-gradient-to-br from-brand-500 to-emerald-600"
@@ -241,10 +242,11 @@ export default function Dashboard() {
               {house.street ? ` · ${house.street}` : ""}
             </p>
             <p className="text-3xl font-extrabold mt-1">{money(saldo)}</p>
-            <p className="text-white/90 text-sm mt-1">
-              {conAdeudo ? "Saldo pendiente por pagar" : "Estás al corriente ✓"}
+            <p className="text-white/90 text-sm mt-1 flex items-center justify-between">
+              <span>{conAdeudo ? "Saldo pendiente por pagar" : "Estás al corriente ✓"}</span>
+              <span className="text-white/90">Ver detalle ›</span>
             </p>
-          </div>
+          </button>
         )}
 
         {/* Comunicados */}

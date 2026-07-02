@@ -6,6 +6,18 @@ import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
 import { autoprocesarIncidencia } from "./actions";
+import { generarResolucionOficial } from "./resolucion-actions";
+
+// Genera la resolución oficial tras aprobar una multa (best-effort: la multa
+// ya quedó aplicada; si la IA falla, se puede regenerar después).
+async function generarResolucion(incidentId: string) {
+  try {
+    const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token ?? "";
+    await generarResolucionOficial(token, incidentId);
+  } catch {
+    /* no bloquea el flujo del comité */
+  }
+}
 
 type Cat = { id: string; nombre: string; monto_base: number };
 type Reporte = {
@@ -159,6 +171,7 @@ export default function IncidenciasPage() {
       setPropErr(res.error);
       return; // NO se remueve: la propuesta sigue pendiente en la BD
     }
+    if (aprobar) void generarResolucion(id);
     setPropuestas((l) => l.filter((x) => x.id !== id));
   }
 
@@ -530,6 +543,7 @@ function ResolverItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void 
       setItemErr(res.error); // NO se remueve: sigue pendiente en la BD
       return;
     }
+    if (accion === "multar") void generarResolucion(r.id);
     onDone(r.id);
   }
 
