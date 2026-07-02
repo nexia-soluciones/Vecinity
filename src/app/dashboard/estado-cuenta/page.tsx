@@ -6,8 +6,10 @@ import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
 import { generarReciboAbono } from "../recibo-actions";
+import { leerComprobante } from "../pagos/actions";
 import { VerResolucionButton } from "../_components/VerResolucionButton";
 
+const BUCKET = "vecino-comprobantes";
 const esMulta = (concepto: string) => /^multa\b/i.test(concepto);
 
 type Mov = {
@@ -26,6 +28,7 @@ type Casa = {
   propietario: string | null;
   estatus: string | null;
   saldo: number;
+  colonia_id: string;
 };
 
 const money = (n: number) =>
@@ -45,6 +48,15 @@ export default function EstadoCuentaPage() {
   const [buscando, setBuscando] = useState(false);
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
+  // Registrar pago del vecino (comité sube el comprobante que le mandaron)
+  const [regOpen, setRegOpen] = useState(false);
+  const [regMonto, setRegMonto] = useState("750");
+  const [regConcepto, setRegConcepto] = useState("");
+  const [regFecha, setRegFecha] = useState("");
+  const [regFile, setRegFile] = useState<File | null>(null);
+  const [regBusy, setRegBusy] = useState(false);
+  const [regMsg, setRegMsg] = useState<string | null>(null);
+  const [regErr, setRegErr] = useState<string | null>(null);
 
   // Solo admin/comité
   useEffect(() => {
@@ -68,7 +80,7 @@ export default function EstadoCuentaPage() {
   async function cargarCasa(hid: string) {
     const { data: h } = await supabaseBrowser
       .from("houses")
-      .select("id, numero, propietario, estatus, saldo")
+      .select("id, numero, propietario, estatus, saldo, colonia_id")
       .eq("id", hid)
       .maybeSingle();
     const { data: t } = await supabaseBrowser
@@ -121,6 +133,78 @@ export default function EstadoCuentaPage() {
       generarReciboAbono(token, id).catch(() => {});
     }
     if (casa) await cargarCasa(casa.id);
+  }
+
+  // El comité registra el pago de un vecino que le mandó su comprobante.
+  // Sube la imagen a Storage, corre OCR (best-effort) y llama a registrar_abono_admin,
+  // que lo deja aprobado y aplica el saldo. Doble candado anti-duplicado en la BD.
+  async function registrarPagoComite() {
+    if (!casa) return;
+    const m = parseFloat(regMonto);
+    if (!m || m <= 0) return setRegErr("Escribe un monto válido.");
+    setRegBusy(true);
+    setRegErr(null);
+    setRegMsg(null);
+    try {
+      let url: string | null = null;
+      let hash: string | null = null;
+      let ocr: unknown = null;
+      let ref: string | null = null;
+      if (regFile) {
+        const buf = await regFile.arrayBuffer();
+        const digest = await crypto.subtle.digest("SHA-256", buf);
+        hash = Array.from(new Uint8Array(digest))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        const ext = (regFile.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `${casa.colonia_id}/${casa.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabaseBrowser.storage.from(BUCKET).upload(path, regFile);
+        if (upErr) throw new Error("No se pudo subir el comprobante.");
+        url = supabaseBrowser.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+        // OCR best-effort: extrae la clave de rastreo para el candado anti-duplicado.
+        try {
+          const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
+          if (token && url) {
+            const oc = await leerComprobante(token, url);
+            if (oc.ok) {
+              ocr = oc.data;
+              ref = oc.data.clave_rastreo || oc.data.folio || null;
+            }
+          }
+        } catch {
+          /* el OCR es opcional; el pago se registra igual */
+        }
+      }
+      const { data, error } = await supabaseBrowser.rpc("registrar_abono_admin", {
+        p_house_id: casa.id,
+        p_monto: m,
+        p_concepto: regConcepto.trim() || "Pago registrado por el comité",
+        p_comprobante_url: url,
+        p_comprobante_hash: hash,
+        p_ocr: ocr,
+        p_ref: ref,
+        p_fecha: regFecha || null,
+      });
+      if (error) throw new Error(error.message.replace(/^.*?:\s/, ""));
+      const r = data as { ok?: boolean; dup?: boolean; dup_ref?: boolean } | null;
+      if (r?.dup) {
+        setRegErr("Ese mismo comprobante ya estaba registrado para esta casa.");
+      } else if (r?.dup_ref) {
+        setRegErr("Ese pago (misma clave de rastreo) ya estaba registrado. No se duplicó.");
+      } else {
+        setRegMsg("Pago registrado y aplicado ✓");
+        setRegMonto("750");
+        setRegConcepto("");
+        setRegFecha("");
+        setRegFile(null);
+        setRegOpen(false);
+        await cargarCasa(casa.id);
+      }
+    } catch (e) {
+      setRegErr(e instanceof Error ? e.message : "No se pudo registrar el pago.");
+    } finally {
+      setRegBusy(false);
+    }
   }
 
   // Descarga el recibo foliado de un abono aprobado; lo genera si aún no existe.
@@ -257,6 +341,98 @@ export default function EstadoCuentaPage() {
                 le cuadre&rdquo; al vecino. Revísalos abajo.
               </p>
             )}
+
+            {/* Registrar pago del vecino (el comité sube el comprobante que le mandaron) */}
+            <section className="mt-3 bg-white rounded-2xl ring-1 ring-slate-100 p-4">
+              {!regOpen ? (
+                <button
+                  onClick={() => {
+                    setRegOpen(true);
+                    setRegMsg(null);
+                    setRegErr(null);
+                  }}
+                  className="w-full rounded-xl bg-brand-50 text-brand-700 font-semibold px-4 py-2.5 text-sm hover:bg-brand-100"
+                >
+                  ＋ Registrar pago del vecino
+                </button>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-700">
+                      Registrar pago · Casa {casa.numero}
+                    </p>
+                    <button
+                      onClick={() => setRegOpen(false)}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 -mt-1">
+                    Sube el comprobante que te mandó el vecino. Queda aprobado y se aplica al saldo.
+                  </p>
+
+                  <label className="text-xs font-semibold text-slate-600">
+                    Comprobante (foto o captura)
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setRegFile(e.target.files?.[0] ?? null)}
+                      className="mt-1 w-full text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-3 file:py-2 file:font-semibold"
+                    />
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Monto
+                      <input
+                        value={regMonto}
+                        onChange={(e) => setRegMonto(e.target.value)}
+                        inputMode="decimal"
+                        className="mt-1 w-full rounded-lg ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Fecha del pago (opcional)
+                      <input
+                        type="date"
+                        value={regFecha}
+                        onChange={(e) => setRegFecha(e.target.value)}
+                        className="mt-1 w-full rounded-lg ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="text-xs font-semibold text-slate-600">
+                    Concepto (opcional)
+                    <input
+                      value={regConcepto}
+                      onChange={(e) => setRegConcepto(e.target.value)}
+                      placeholder="Ej. Cuota Abril 2026"
+                      className="mt-1 w-full rounded-lg ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                    />
+                  </label>
+
+                  {regErr && (
+                    <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200">
+                      {regErr}
+                    </p>
+                  )}
+                  <button
+                    onClick={registrarPagoComite}
+                    disabled={regBusy}
+                    className="rounded-xl bg-gradient-to-br from-brand-500 to-emerald-600 text-white font-semibold px-4 py-2.5 text-sm disabled:opacity-40"
+                  >
+                    {regBusy ? "Registrando…" : "Registrar y aplicar pago"}
+                  </button>
+                </div>
+              )}
+              {regMsg && (
+                <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2 ring-1 ring-emerald-200 mt-2">
+                  {regMsg}
+                </p>
+              )}
+            </section>
 
             {/* Movimientos */}
             <section className="mt-4">

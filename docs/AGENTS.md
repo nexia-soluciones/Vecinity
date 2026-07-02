@@ -7,6 +7,25 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Comité registra el pago de un vecino (comprobante por WhatsApp) (2026-07-02) ✅
+
+Necesidad (Juan): vecinos —sobre todo mayores— que no pueden subir su comprobante se lo mandan al comité
+por WhatsApp; antes Juan **entraba a la cuenta del vecino** para subirlo (mala práctica). Ahora hay una
+función de comité:
+- **Migración 038 · `registrar_abono_admin(house, monto, concepto, url, hash, ocr, ref, fecha)`** — como
+  `registrar_abono` pero recibe `p_house_id`, exige `is_admin()`, valida que la casa sea de su colonia, lo
+  deja **aprobado** directo (aplica saldo con `resolver_transaccion`) y opcionalmente fecha el pago
+  (`p_fecha`). **Doble candado anti-duplicado**: por hash del archivo y por clave de rastreo (`ref_rastreo`,
+  ≥6 díg, no rechazado) → no se registra dos veces el mismo pago aunque re-fotografíen el recibo.
+- **UI en `dashboard/estado-cuenta`**: botón "＋ Registrar pago del vecino" cuando hay una casa cargada →
+  sube el comprobante al bucket `vecino-comprobantes` (la política INSERT ya permite a cualquier
+  autenticado, no hizo falta tocar Storage), corre OCR (`leerComprobante`, reusado del flujo del vecino)
+  para llenar la clave de rastreo, y llama `registrar_abono_admin`. Monto default 750, fecha y concepto
+  opcionales. Verificado E2E (rollback): aplica −750, 2º intento misma clave → `dup_ref`.
+- **Dato aplicado:** se registró el pago de **abril de la casa 165** ($750, folio 0046176552, comprobante
+  BBVA que mandó la vecina) → casa 165 pasó de −$750 (con adeudo) a **$0, al corriente**. Imagen subida a
+  Storage, abono fechado 2026-04-01.
+
 ## Auto-conciliar: respaldo por monto+fecha con aprobación del comité (2026-07-02) ✅
 
 Antes, la conciliación cruzaba el comprobante del vecino contra el banco **solo por clave de
