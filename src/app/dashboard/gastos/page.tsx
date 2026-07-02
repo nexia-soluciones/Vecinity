@@ -524,6 +524,31 @@ export default function GastosPage() {
           </div>
         </div>
 
+        {/* Desglose por categoría — gráfica de barras (foto visual del gasto) */}
+        {porCat.length > 0 && (
+          <section className="mt-5">
+            <h2 className="text-sm font-bold text-slate-700 mb-2">Por categoría</h2>
+            <ul className="flex flex-col gap-2.5 bg-white rounded-2xl ring-1 ring-slate-100 p-4">
+              {porCat.map(([cat, val]) => (
+                <li key={cat}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700 font-medium">{cat}</span>
+                    <span className="text-slate-500">
+                      {money(val)} · {Math.round((val / total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={`h-full ${COLOR_CATEGORIA[cat] ?? "bg-brand-500"}`}
+                      style={{ width: `${porCat[0][1] > 0 ? (val / porCat[0][1]) * 100 : 0}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* Filtro por categoría — CHIPS (una pastilla por categoría con monto) */}
         {porCat.length > 0 && (
           <section className="mt-5">
