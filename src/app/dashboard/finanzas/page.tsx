@@ -22,6 +22,7 @@ type Gasto = {
   estado: string;
   archivo_principal_url: string | null;
   improvement_id: string | null;
+  es_bien: boolean;
 };
 type Proyecto = {
   id: string;
@@ -108,7 +109,7 @@ export default function FinanzasPage() {
         supabaseBrowser
           .from("colonia_expenses")
           .select(
-            "id, concepto, monto, categoria, fecha_pago, estado, archivo_principal_url, improvement_id"
+            "id, concepto, monto, categoria, fecha_pago, estado, archivo_principal_url, improvement_id, es_bien"
           )
           .order("fecha_pago", { ascending: false }),
         supabaseBrowser
@@ -256,6 +257,11 @@ export default function FinanzasPage() {
                           📁 {proyNombre(g.improvement_id)}
                         </span>
                       )}
+                      {g.es_bien && (
+                        <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 rounded-full px-2 py-0.5">
+                          🪑 bien de la villa
+                        </span>
+                      )}
                       {g.estado === "sin_clasificar" && (
                         <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">
                           en revisión del comité
@@ -281,6 +287,44 @@ export default function FinanzasPage() {
             </ul>
           )}
         </section>
+
+        {/* Bienes de la villa (inventario — histórico, no depende del mes) */}
+        {gastos.some((g) => g.es_bien) && (
+          <section className="mt-6">
+            <h2 className="text-sm font-bold text-slate-700 mb-2">🪑 Bienes de la villa</h2>
+            <p className="text-xs text-slate-500 mb-2">
+              Cosas que ahora son patrimonio de todos (compradas con el fondo común).
+            </p>
+            <ul className="flex flex-col gap-2">
+              {gastos
+                .filter((g) => g.es_bien)
+                .map((g) => (
+                  <li
+                    key={g.id}
+                    className="bg-teal-50/60 rounded-2xl p-3.5 ring-1 ring-teal-100 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{g.concepto}</p>
+                      <p className="text-xs text-slate-500">{fechaCorta(g.fecha_pago)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {g.archivo_principal_url && (
+                        <a
+                          href={g.archivo_principal_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Ver comprobante"
+                        >
+                          📎
+                        </a>
+                      )}
+                      <span className="font-bold text-slate-700">{money(Number(g.monto))}</span>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        )}
 
         {/* Proyectos */}
         <section className="mt-6 mb-6">

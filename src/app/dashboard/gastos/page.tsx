@@ -17,16 +17,18 @@ type Gasto = {
   estado: string;
   concepto_banco: string | null;
   improvement_id: string | null;
+  es_bien: boolean;
 };
 
 type Proyecto = { id: string; titulo: string; estado: string };
 
-// Edición en la bandeja "sin clasificar" (una por gasto)
+// Edición en la bandeja "sin clasificar" y al RE-clasificar un gasto ya clasificado
 type Clasif = {
   concepto: string;
   categoria: string;
   improvementId: string;
   keyword: string;
+  esBien: boolean;
   busy?: boolean;
   msg?: string;
 };
@@ -128,7 +130,7 @@ export default function GastosPage() {
       supabaseBrowser
         .from("colonia_expenses")
         .select(
-          "id, concepto, monto, categoria, fecha_pago, descripcion, archivo_principal_url, estado, concepto_banco, improvement_id"
+          "id, concepto, monto, categoria, fecha_pago, descripcion, archivo_principal_url, estado, concepto_banco, improvement_id, es_bien"
         )
         .order("fecha_pago", { ascending: false })
         .limit(200),
@@ -151,6 +153,7 @@ export default function GastosPage() {
             categoria: g.categoria !== "Otros" ? g.categoria : "",
             improvementId: g.improvement_id ?? "",
             keyword: derivarKeyword(g.concepto_banco ?? g.concepto),
+            esBien: false,
           };
         }
       }
@@ -210,6 +213,7 @@ export default function GastosPage() {
       p_categoria: c.categoria.trim(),
       p_improvement_id: c.improvementId || null,
       p_keyword: c.keyword.trim() || null,
+      p_es_bien: c.esBien,
     });
     if (error) return setC(g.id, { busy: false, msg: error.message.replace(/^.*?:\s/, "") });
     setClasif((m) => {
@@ -218,6 +222,28 @@ export default function GastosPage() {
       return n;
     });
     await cargarGastos();
+  }
+
+  // Abrir edición de un gasto YA clasificado (asignar proyecto/razón/bien después)
+  function editarGasto(g: Gasto) {
+    setClasif((m) => ({
+      ...m,
+      [g.id]: {
+        concepto: g.concepto,
+        categoria: g.categoria,
+        improvementId: g.improvement_id ?? "",
+        keyword: "",
+        esBien: g.es_bien,
+      },
+    }));
+  }
+
+  function cancelarEdicion(id: string) {
+    setClasif((m) => {
+      const n = { ...m };
+      delete n[id];
+      return n;
+    });
   }
 
   async function registrar() {
@@ -387,6 +413,15 @@ export default function GastosPage() {
                           o cámbialo.
                         </p>
                       )}
+                      <label className="flex items-center gap-2 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={c.esBien}
+                          onChange={(e) => setC(g.id, { esBien: e.target.checked })}
+                          className="w-4 h-4 accent-amber-600"
+                        />
+                        🪑 Es un bien de la villa (queda en el inventario)
+                      </label>
                       <label className="text-[11px] text-slate-500">
                         El sistema aprenderá esta firma del proveedor →{" "}
                         <input
@@ -562,52 +597,130 @@ export default function GastosPage() {
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {clasificados.map((g) => (
-                <li
-                  key={g.id}
-                  className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <p
-                      className="font-semibold text-slate-800 truncate"
-                      title={g.concepto_banco ?? undefined}
-                    >
-                      {g.concepto}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {g.categoria} · {fecha(g.fecha_pago)}
-                      {g.descripcion ? ` · ${g.descripcion}` : ""}
-                    </p>
-                    {proyNombre(g.improvement_id) && (
-                      <span className="inline-block mt-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 rounded-full px-2 py-0.5">
-                        📁 {proyNombre(g.improvement_id)}
-                      </span>
+              {clasificados.map((g) => {
+                const c = clasif[g.id]; // presente = editando este gasto
+                return (
+                  <li key={g.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p
+                          className="font-semibold text-slate-800 truncate"
+                          title={g.concepto_banco ?? undefined}
+                        >
+                          {g.concepto}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {g.categoria} · {fecha(g.fecha_pago)}
+                          {g.descripcion ? ` · ${g.descripcion}` : ""}
+                        </p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {proyNombre(g.improvement_id) && (
+                            <span className="inline-block mt-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 rounded-full px-2 py-0.5">
+                              📁 {proyNombre(g.improvement_id)}
+                            </span>
+                          )}
+                          {g.es_bien && (
+                            <span className="inline-block mt-1 text-[10px] font-semibold text-teal-700 bg-teal-50 rounded-full px-2 py-0.5">
+                              🪑 bien de la villa
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {g.archivo_principal_url && (
+                          <a
+                            href={g.archivo_principal_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-base"
+                            title="Ver comprobante"
+                          >
+                            📎
+                          </a>
+                        )}
+                        <span className="font-bold text-slate-700">{money(Number(g.monto))}</span>
+                        <button
+                          onClick={() => (c ? cancelarEdicion(g.id) : editarGasto(g))}
+                          className="text-slate-400 hover:text-brand-600 text-sm px-1"
+                          title="Editar / asignar proyecto"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => eliminar(g.id)}
+                          disabled={borrando.has(g.id)}
+                          className="text-slate-300 hover:text-red-500 text-lg leading-none disabled:opacity-40 px-1"
+                          title="Eliminar"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Edición inline: razón + categoría + proyecto + bien */}
+                    {c && (
+                      <div className="mt-3 border-t border-slate-100 pt-3 flex flex-col gap-2">
+                        <input
+                          value={c.concepto}
+                          onChange={(e) => setC(g.id, { concepto: e.target.value })}
+                          placeholder="Razón del gasto"
+                          className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={c.categoria}
+                            onChange={(e) => setC(g.id, { categoria: e.target.value })}
+                            list="cats"
+                            placeholder="Categoría"
+                            className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                          />
+                          <select
+                            value={c.improvementId}
+                            onChange={(e) => setC(g.id, { improvementId: e.target.value })}
+                            className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                          >
+                            <option value="">Sin proyecto</option>
+                            {proyectos.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.titulo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={c.esBien}
+                            onChange={(e) => setC(g.id, { esBien: e.target.checked })}
+                            className="w-4 h-4 accent-teal-600"
+                          />
+                          🪑 Es un bien de la villa (queda en el inventario)
+                        </label>
+                        {c.msg && (
+                          <p className="text-xs text-red-600 bg-red-50 rounded-lg px-2 py-1.5 ring-1 ring-red-200">
+                            {c.msg}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => clasificar(g)}
+                            disabled={c.busy}
+                            className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-bold py-2 disabled:opacity-40"
+                          >
+                            {c.busy ? "Guardando…" : "Guardar"}
+                          </button>
+                          <button
+                            onClick={() => cancelarEdicion(g.id)}
+                            className="rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold px-4 py-2"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {g.archivo_principal_url && (
-                      <a
-                        href={g.archivo_principal_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-base"
-                        title="Ver comprobante"
-                      >
-                        📎
-                      </a>
-                    )}
-                    <span className="font-bold text-slate-700">{money(Number(g.monto))}</span>
-                    <button
-                      onClick={() => eliminar(g.id)}
-                      disabled={borrando.has(g.id)}
-                      className="text-slate-300 hover:text-red-500 text-lg leading-none disabled:opacity-40 px-1"
-                      title="Eliminar"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

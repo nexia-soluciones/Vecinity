@@ -621,11 +621,19 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   $4285.89→$4285.98 corregido al banco). Proyectos creados y ligados: **Bancas para áreas
   comunes** (4 pagos Home Depot) y **Manguera y aspersores** (enlazado al manual).
   Total BD: $579,590.12 (154 gastos).
-- ⚠️ **2 dobles conteos detectados** (manuales sin evidencia que duplican filas del banco,
-  pendiente OK de Juan para borrar): "Mantenimiento alberca Mensual" $5,220 (05-mar, duplica
-  el pago mensual del banco) y "Reparación de Pistones" $3,828 (27-feb, = suma EXACTA de los
-  2 pagos del banco: anticipo $2,679 + liquidación $1,149, misma cuenta destino). "Garrafones
-  $174" sí es legítimo (efectivo, no está en el banco).
+- **2 dobles conteos borrados con OK de Juan**: "Mantenimiento alberca Mensual" $5,220
+  (duplicaba el pago mensual del banco) y "Reparación de Pistones" $3,828 (= suma EXACTA de
+  los 2 pagos del banco: anticipo $2,679 + liquidación $1,149, misma cuenta destino).
+  "Garrafones $174" es legítimo (efectivo, no está en el banco). Total final: $570,542.12,
+  cuadra con el reporte del comité (~$1 de redondeo de seriales).
+- **Migración `040_bienes_editar_gasto.sql`** (aplicada): `es_bien` en `colonia_expenses`
+  (🪑 patrimonio/inventario de la villa, ej. cafetera Walmart $899 "para las sesiones") +
+  `clasificar_gasto` acepta `p_es_bien` y sirve para RE-clasificar gastos ya clasificados.
+  UI: botón ✎ en cualquier gasto de `/dashboard/gastos` → editar razón/categoría/proyecto/bien
+  inline (así se asignó "Mano de obra bancas (pago 2 de 3)" $700 → proyecto Bancas).
+  `/dashboard/finanzas` muestra sección "🪑 Bienes de la villa" (transparencia del patrimonio).
+  NOTA: banco 17-may tiene "MANTTO JUEGO INFANTIL 1 DE 3" $700 (mismo trabajador, pagos 1/2/3
+  de 3) — el "3 de 3" aún no aparece en el estado de cuenta.
 
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
