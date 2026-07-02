@@ -341,6 +341,7 @@ export default function Dashboard() {
           <Action emoji="🚗" label="Mis vehículos" onClick={() => router.push("/dashboard/vehiculos")} />
           <Action emoji="👮" label="Registrar visita" onClick={() => router.push("/dashboard/visitas")} />
           <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
+          <Action emoji="📊" label="Finanzas de la colonia" onClick={() => router.push("/dashboard/finanzas")} />
         </div>
 
         {/* Botón SOS — mantener presionado para activar */}

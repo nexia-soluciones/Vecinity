@@ -275,7 +275,18 @@ export default function PanelComite() {
             <span className="text-2xl">🏦</span>
             <span>
               <span className="block font-semibold text-slate-800 text-sm">Conciliación bancaria</span>
-              <span className="block text-xs text-slate-500">Sube el estado de cuenta y asigna pagos a casas</span>
+              <span className="block text-xs text-slate-500">Sube el estado de cuenta: pagos a casas y gastos</span>
+            </span>
+            <span className="ml-auto text-brand-500 text-lg">›</span>
+          </button>
+          <button
+            onClick={() => router.push("/dashboard/proyectos")}
+            className="mt-2 w-full rounded-2xl bg-white ring-1 ring-slate-100 p-3.5 flex items-center gap-3 text-left hover:ring-brand-200 transition shadow-sm"
+          >
+            <span className="text-2xl">📁</span>
+            <span>
+              <span className="block font-semibold text-slate-800 text-sm">Proyectos de mejora</span>
+              <span className="block text-xs text-slate-500">Pagos, contratos y cotizaciones por proyecto</span>
             </span>
             <span className="ml-auto text-brand-500 text-lg">›</span>
           </button>

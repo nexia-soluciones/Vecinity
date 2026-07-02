@@ -585,6 +585,37 @@ Todo desplegado en `main` (auto-deploy EasyPanel). Sin pendientes abiertos de es
 - **Datos**: corregidos conceptos mal rotulados sistémicos ("Mantenimiento Mensual - April 2026" del 30-abr → Mayo; April→Abril; June→Junio) e insertados pagos manuales de Casa 178 (Mayo $850 + Junio $750, idempotentes por `banco_hash`, replicando `resolver_transaccion`). Tope morosos: saldo > $1000 excluyendo `en_convenio`.
 - **Ícono de app de marca**: emblema Vecinity (escudo+casa+pulso) → `icon.svg` + `apple-icon.png` + PWA `manifest.ts` + `icon-192/512.png` (generados con `sharp`). Se quitó el `favicon.ico` de plantilla.
 
+## Sesión 2026-07-02 (2) — Control de gastos estandarizado ✅ (migr. 039)
+Visión de Juan: el estado de cuenta diario queda completo en Supabase — abonos conciliados a
+casa (ya existía) y ahora también los CARGOS como gastos con razón, categoría y proyecto.
+- **Migración `039_gastos_banco.sql`** (aplicada): `colonia_expenses` + `banco_hash` (índice
+  UNIQUE por colonia = dedup al re-subir el mismo Excel), `concepto_banco` (texto crudo del
+  banco), `estado` (`sin_clasificar`/`clasificado`). Tabla **`expense_cat_map`** (keyword→
+  categoría, la más larga gana): 20 semillas extraídas del Excel REAL del comité
+  (Dashboard_Financiero_Villa_Catania_2026, 151 egresos categorizados a mano: JARDINER,
+  ALBERCA, BASURA, JUMAPA, CFE, TELMEX, SAT/GUIA, RFC de la vigilancia…) + mapa APRENDIDO.
+  Tabla **`project_documents`** (contrato/cotización/factura por proyecto, lectura colonia-wide).
+- **RPCs SECURITY DEFINER**: `importar_gasto_banco` (dedup + auto-categoría; recurrente
+  conocido → clasificado solo; desconocido o con proyecto propuesto → bandeja) y
+  `clasificar_gasto` (razón + categoría + proyecto + APRENDE la firma del proveedor).
+  Patrón 036: lo aprendido con proyecto se PROPONE (prellenado en bandeja), nunca se auto-aplica.
+- **Conciliación** ahora parsea también los CARGOS del Excel: preview de auto-categoría,
+  dedup marcado, botón "Importar gastos" (resumen: auto-clasificados vs a bandeja).
+- **Gastos v2**: bandeja "Por clasificar" (razón + categoría + proyecto + keyword editable
+  "el sistema aprenderá…"), selector de proyecto en captura manual, badge 📁 proyecto y CSV
+  con columna Proyecto. Captura manual sigue para gastos en efectivo.
+- **`/dashboard/proyectos`** (comité): CRUD de `improvement_projects` (tabla existía desde 002
+  sin UI), presupuesto vs gastado real (suma de gastos ligados), pagos ligados y subir
+  documentos a Storage `vecino-evidencias/{colonia}/proyectos/`.
+- **`/dashboard/finanzas`** (TODO residente aprobado, read-only): entradas/gastos por mes
+  (hora MX), desglose por categoría, detalle con comprobante, proyectos con costo y documentos.
+  Acción 📊 en el dashboard del residente; el RLS colonia-wide de 002 ya lo permitía.
+- **QA**: prueba E2E transaccional en BD simulando al usuario comité real (`set_config`
+  jwt claims) con ROLLBACK: importar→auto-clasificar, dedup mismo hash, bandeja, clasificar+
+  aprender, 2° pago del mismo proveedor propone el proyecto. `npm run build` limpio.
+- Pendiente de esta fase: backfill opcional de los ~151 egresos históricos del Excel
+  (dedup los protege si se re-suben), y crear proyectos reales (RFID, Bancas, Manguera).
+
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).

@@ -34,6 +34,21 @@ type Ingreso = {
   propuestaSel?: string; // abonoId elegido cuando hay varios candidatos
 };
 
+// Egreso (cargo) del estado de cuenta → gasto de la colonia (colonia_expenses).
+// La categoría se auto-sugiere con expense_cat_map (semillas + aprendido, migr. 039).
+type Egreso = {
+  key: string;
+  fecha: string;
+  concepto: string;
+  monto: number;
+  hash: string;
+  categoria: string | null; // preview del match (el servidor decide igual)
+  incluir: boolean;
+  dup: boolean;
+  estado: "" | "ok" | "bandeja" | "dup" | "error";
+  errorMsg?: string;
+};
+
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
@@ -93,7 +108,11 @@ export default function ConciliacionPage() {
   const [coloniaId, setColoniaId] = useState<string | null>(null);
   const [casas, setCasas] = useState<Record<string, string>>({}); // numero -> id
   const [refMap, setRefMap] = useState<Record<string, string>>({}); // refKey -> numero
+  const [catMap, setCatMap] = useState<{ keyword: string; categoria: string }[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  const [egresos, setEgresos] = useState<Egreso[]>([]);
+  const [egresosBusy, setEgresosBusy] = useState(false);
+  const [egresosResumen, setEgresosResumen] = useState<string | null>(null);
   const [fileMsg, setFileMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resumen, setResumen] = useState<string | null>(null);
@@ -108,6 +127,16 @@ export default function ConciliacionPage() {
     for (const h of (hs as unknown as { id: string; numero: string }[]) ?? [])
       casasDict[String(h.numero)] = h.id;
     setCasas(casasDict);
+
+    // Mapa concepto→categoría de gastos (para el preview; el servidor re-decide igual)
+    const { data: cm } = await supabaseBrowser
+      .from("expense_cat_map")
+      .select("keyword, categoria");
+    setCatMap(
+      (((cm as unknown as { keyword: string; categoria: string }[]) ?? []).slice()).sort(
+        (a, b) => b.keyword.length - a.keyword.length
+      )
+    );
 
     const { data: rm } = await supabaseBrowser.from("bank_ref_map").select("ref_key, house_id");
     const idToNum: Record<string, string> = {};
@@ -146,6 +175,8 @@ export default function ConciliacionPage() {
     setFileMsg(null);
     setResumen(null);
     setIngresos([]);
+    setEgresos([]);
+    setEgresosResumen(null);
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { cellDates: true });
@@ -172,25 +203,31 @@ export default function ConciliacionPage() {
       const iFecha = col("día", "dia", "fecha");
       const iConcepto = col("concepto", "referencia");
       const iAbono = col("abono");
+      const iCargo = col("cargo");
       const iSaldo = col("saldo");
 
-      // hashes ya importados (para marcar duplicados)
-      const { data: existentes } = await supabaseBrowser
-        .from("transactions")
-        .select("banco_hash")
-        .not("banco_hash", "is", null);
+      // hashes ya importados (para marcar duplicados): abonos y gastos
+      const [{ data: existentes }, { data: gastosExist }] = await Promise.all([
+        supabaseBrowser.from("transactions").select("banco_hash").not("banco_hash", "is", null),
+        supabaseBrowser.from("colonia_expenses").select("banco_hash").not("banco_hash", "is", null),
+      ]);
       const yaImportados = new Set(
         ((existentes as unknown as { banco_hash: string }[]) ?? []).map((e) => e.banco_hash)
+      );
+      const gastosYa = new Set(
+        ((gastosExist as unknown as { banco_hash: string }[]) ?? []).map((e) => e.banco_hash)
       );
 
       const casasSet = new Set(Object.keys(casas));
       const out: Ingreso[] = [];
+      const outEg: Egreso[] = [];
       let saltadasPorFecha = 0;
       for (let i = hi + 1; i < rows.length; i++) {
         const r = rows[i] as unknown[];
         if (!r || r.length === 0) continue;
         const monto = toNum(r[iAbono]);
-        if (monto <= 0) continue; // solo ingresos
+        const cargo = iCargo >= 0 ? toNum(r[iCargo]) : 0;
+        if (monto <= 0 && cargo <= 0) continue;
         const concepto = String(r[iConcepto] ?? "").trim();
         const fecha = fmtFecha(r[iFecha]);
         // Corte: ignora movimientos anteriores a "desde" (histórico ya migrado)
@@ -199,6 +236,29 @@ export default function ConciliacionPage() {
           continue;
         }
         const saldo = iSaldo >= 0 ? toNum(r[iSaldo]) : 0;
+
+        // ---- CARGO (egreso) → gasto de la colonia -------------------------
+        if (cargo > 0) {
+          const hash = await sha256(`${fecha}|${cargo}|${concepto}|${saldo}`);
+          const dup = gastosYa.has(hash);
+          // Preview de auto-categoría (keyword más larga gana, igual que el servidor)
+          const up = concepto.toUpperCase();
+          const cat = catMap.find((m) => up.includes(m.keyword))?.categoria ?? null;
+          outEg.push({
+            key: `e${i}-${hash.slice(0, 8)}`,
+            fecha,
+            concepto,
+            monto: cargo,
+            hash,
+            categoria: cat,
+            incluir: !dup,
+            dup,
+            estado: dup ? "dup" : "",
+          });
+          continue;
+        }
+
+        // ---- ABONO (ingreso) → conciliar a casa ---------------------------
         const refKey = normRef(concepto);
         const hash = await sha256(`${fecha}|${monto}|${concepto}|${saldo}`);
         // Casa: primero por el concepto del banco (C###/CASA###), luego el mapa aprendido.
@@ -220,19 +280,24 @@ export default function ConciliacionPage() {
           estado: dup ? "dup" : "",
         });
       }
-      if (out.length === 0) {
+      if (out.length === 0 && outEg.length === 0) {
         setFileMsg(
           saltadasPorFecha > 0
-            ? `No hay ingresos desde ${desde} (${saltadasPorFecha} anteriores ignorados por el corte).`
-            : "No encontré ingresos (abonos) en el archivo."
+            ? `No hay movimientos desde ${desde} (${saltadasPorFecha} anteriores ignorados por el corte).`
+            : "No encontré movimientos (abonos ni cargos) en el archivo."
         );
         return;
       }
       setIngresos(out);
+      setEgresos(outEg);
       const nuevos = out.filter((o) => !o.dup).length;
       const conSug = out.filter((o) => o.sugerida && !o.dup).length;
+      const egNuevos = outEg.filter((o) => !o.dup).length;
       const corte = saltadasPorFecha > 0 ? ` · ${saltadasPorFecha} anteriores a ${desde} ignorados` : "";
-      setFileMsg(`${out.length} ingresos · ${nuevos} nuevos · ${conSug} con casa sugerida · ${out.length - nuevos} ya importados${corte}.`);
+      setFileMsg(
+        `${out.length} ingresos (${nuevos} nuevos · ${conSug} con casa sugerida) · ` +
+          `${outEg.length} gastos (${egNuevos} nuevos)${corte}.`
+      );
     } catch (e) {
       setFileMsg("No pude leer el archivo. ¿Es el Excel del banco?");
       console.error(e);
@@ -241,6 +306,55 @@ export default function ConciliacionPage() {
 
   function setRow(key: string, patch: Partial<Ingreso>) {
     setIngresos((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  function setEgRow(key: string, patch: Partial<Egreso>) {
+    setEgresos((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  // Importa los CARGOS seleccionados como gastos de la colonia. Los recurrentes
+  // conocidos (jardinería, alberca, basura…) se clasifican solos; el resto queda
+  // en la bandeja "sin clasificar" de /dashboard/gastos para ponerles razón.
+  async function importarGastos() {
+    setEgresosBusy(true);
+    setEgresosResumen(null);
+    let auto = 0,
+      bandeja = 0,
+      dup = 0,
+      err = 0;
+    const updated = [...egresos];
+    for (let i = 0; i < updated.length; i++) {
+      const row = updated[i];
+      if (!row.incluir || row.estado === "ok" || row.estado === "bandeja" || row.estado === "dup")
+        continue;
+      const { data, error } = await supabaseBrowser.rpc("importar_gasto_banco", {
+        p_fecha: row.fecha || null,
+        p_monto: row.monto,
+        p_concepto: row.concepto,
+        p_banco_hash: row.hash,
+      });
+      if (error) {
+        err++;
+        updated[i] = { ...row, estado: "error", errorMsg: error.message.replace(/^.*?:\s/, "") };
+        continue;
+      }
+      const r = data as { ok?: boolean; dup?: boolean; categoria?: string; estado?: string } | null;
+      if (r?.dup) {
+        dup++;
+        updated[i] = { ...row, estado: "dup", incluir: false };
+      } else if (r?.estado === "clasificado") {
+        auto++;
+        updated[i] = { ...row, estado: "ok", incluir: false, categoria: r.categoria ?? row.categoria };
+      } else {
+        bandeja++;
+        updated[i] = { ...row, estado: "bandeja", incluir: false, categoria: r?.categoria ?? row.categoria };
+      }
+    }
+    setEgresos(updated);
+    setEgresosBusy(false);
+    setEgresosResumen(
+      `Importados: ${auto + bandeja} (${auto} auto-clasificados · ${bandeja} a la bandeja) · ya importados: ${dup} · errores: ${err}.`
+    );
   }
 
   // Auto-conciliación: cruza cada fila del banco contra los comprobantes con OCR
@@ -437,6 +551,8 @@ export default function ConciliacionPage() {
 
   const seleccion = ingresos.filter((r) => r.incluir && r.estado !== "ok");
   const totalSel = seleccion.reduce((s, r) => s + r.monto, 0);
+  const egSeleccion = egresos.filter((r) => r.incluir && r.estado !== "ok" && r.estado !== "bandeja");
+  const egTotalSel = egSeleccion.reduce((s, r) => s + r.monto, 0);
 
   return (
     <main className="flex-1 bg-gradient-to-b from-brand-50 via-white to-sky-50">
@@ -453,7 +569,8 @@ export default function ConciliacionPage() {
 
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Conciliación bancaria</h1>
         <p className="text-sm text-slate-500">
-          Sube el estado de cuenta del banco (Excel) y asigna cada pago a su casa.
+          Sube el estado de cuenta del banco (Excel): los abonos se concilian a su casa y los
+          cargos entran como gastos de la colonia.
         </p>
 
         {/* Subir archivo */}
@@ -647,6 +764,106 @@ export default function ConciliacionPage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        )}
+
+        {/* ============ EGRESOS (gastos de la colonia) ============ */}
+        {egresos.length > 0 && (
+          <>
+            <h2 className="mt-6 text-lg font-bold text-slate-800">Gastos (cargos del banco)</h2>
+            <p className="text-xs text-slate-500">
+              Los recurrentes conocidos (jardinería, alberca, basura…) se clasifican solos.
+              El resto queda en la bandeja de{" "}
+              <button
+                onClick={() => router.push("/dashboard/gastos")}
+                className="underline font-semibold text-brand-600"
+              >
+                Gastos
+              </button>{" "}
+              para ponerles razón y proyecto.
+            </p>
+
+            <div className="mt-3 bg-gradient-to-br from-slate-700 to-slate-900 text-white rounded-2xl p-4 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white/70 text-xs">Seleccionados</p>
+                  <p className="text-xl font-extrabold">
+                    {egSeleccion.length} · {money(egTotalSel)}
+                  </p>
+                </div>
+                <button
+                  onClick={importarGastos}
+                  disabled={egresosBusy || egSeleccion.length === 0}
+                  className="rounded-xl bg-white/20 hover:bg-white/30 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
+                >
+                  {egresosBusy ? "Importando…" : "Importar gastos"}
+                </button>
+              </div>
+              {egresosResumen && <p className="text-xs text-white/90 mt-2">{egresosResumen}</p>}
+            </div>
+
+            <section className="mt-3 mb-6">
+              <ul className="flex flex-col gap-2">
+                {egresos.map((r) => (
+                  <li
+                    key={r.key}
+                    className={`rounded-2xl p-3 ring-1 ${
+                      r.estado === "ok"
+                        ? "bg-emerald-50 ring-emerald-200"
+                        : r.estado === "bandeja"
+                        ? "bg-amber-50 ring-amber-200"
+                        : r.estado === "dup"
+                        ? "bg-slate-50 ring-slate-200 opacity-70"
+                        : r.estado === "error"
+                        ? "bg-red-50 ring-red-200"
+                        : "bg-white ring-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={r.incluir}
+                        disabled={r.estado === "ok" || r.estado === "dup" || r.estado === "bandeja"}
+                        onChange={(e) => setEgRow(r.key, { incluir: e.target.checked })}
+                        className="mt-1 w-4 h-4 accent-brand-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-slate-500">{r.fecha}</p>
+                          <p className="font-bold text-slate-800">−{money(r.monto)}</p>
+                        </div>
+                        <p className="text-sm text-slate-700 truncate" title={r.concepto}>
+                          {r.concepto}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {r.categoria ? (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
+                              → {r.categoria} (auto)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+                              → a bandeja (sin clasificar)
+                            </span>
+                          )}
+                          {r.estado === "ok" && (
+                            <span className="text-[10px] font-semibold text-emerald-700">✓ importado</span>
+                          )}
+                          {r.estado === "bandeja" && (
+                            <span className="text-[10px] font-semibold text-amber-700">✓ en bandeja</span>
+                          )}
+                          {r.estado === "dup" && (
+                            <span className="text-[10px] font-semibold text-slate-500">ya importado</span>
+                          )}
+                          {r.estado === "error" && (
+                            <span className="text-[10px] font-semibold text-red-600">{r.errorMsg}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </li>
