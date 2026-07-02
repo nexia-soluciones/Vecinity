@@ -371,6 +371,24 @@ export default function GastosPage() {
   const nBienes = clasificadosTodos.filter((g) => g.es_bien).length;
   const proyNombre = (id: string | null) => proyectos.find((p) => p.id === id)?.titulo ?? null;
 
+  // Gasto por mes (todos los gastos, por fecha_pago) para la gráfica mensual
+  const porMesMap = gastos.reduce<Record<string, number>>((acc, g) => {
+    const ym = g.fecha_pago.slice(0, 7);
+    acc[ym] = (acc[ym] || 0) + Number(g.monto);
+    return acc;
+  }, {});
+  const porMes = Object.entries(porMesMap)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-8); // últimos 8 meses con actividad
+  const maxMes = porMes.length ? Math.max(...porMes.map(([, v]) => v)) : 0;
+  const promedioMes = porMes.length
+    ? porMes.reduce((s, [, v]) => s + v, 0) / porMes.length
+    : 0;
+  const mesLabel = (ym: string) => {
+    const M = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    return M[parseInt(ym.slice(5), 10) - 1] ?? ym.slice(5);
+  };
+
   // Categorías activas para los dropdowns. Incluye el valor actual aunque esté
   // desactivado (para no perder la selección al editar un gasto viejo).
   const catsActivas = cats.filter((c) => c.activa).map((c) => c.nombre);
@@ -500,27 +518,61 @@ export default function GastosPage() {
           </section>
         )}
 
-        {/* Total + export */}
+        {/* Gasto mensual + promedio del mes */}
         <div className="mt-4 rounded-3xl p-5 bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-lg">
-          <p className="text-white/70 text-sm">Total registrado</p>
-          <p className="text-3xl font-extrabold mt-1">{money(total)}</p>
-          <div className="flex items-center justify-between mt-1">
-            <p className="text-white/70 text-sm">{gastos.length} gastos</p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.push("/dashboard/proyectos")}
-                className="rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold"
-              >
-                📁 Proyectos
-              </button>
-              <button
-                onClick={exportarCSV}
-                disabled={gastos.length === 0}
-                className="rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
-              >
-                ⬇ Exportar CSV
-              </button>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-white/70 text-sm">Promedio por mes</p>
+              <p className="text-3xl font-extrabold mt-0.5">{money(promedioMes)}</p>
             </div>
+            <div className="text-right">
+              <p className="text-white/60 text-xs">Total · {gastos.length} gastos</p>
+              <p className="text-lg font-bold text-white/90">{money(total)}</p>
+            </div>
+          </div>
+
+          {/* Gráfica de barras por mes */}
+          {porMes.length > 0 && (
+            <div className="mt-4 flex items-end justify-between gap-1.5 h-28">
+              {porMes.map(([ym, val]) => {
+                const h = maxMes > 0 ? Math.max(6, (val / maxMes) * 100) : 6;
+                const sobreProm = val > promedioMes;
+                return (
+                  <div key={ym} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0">
+                    <span className="text-[9px] text-white/70 tabular-nums">
+                      {val >= 1000 ? `${Math.round(val / 1000)}k` : Math.round(val)}
+                    </span>
+                    <div
+                      className={`w-full rounded-t-md ${sobreProm ? "bg-amber-400" : "bg-emerald-400/80"}`}
+                      style={{ height: `${h}%` }}
+                      title={`${mesLabel(ym)} ${ym.slice(0, 4)}: ${money(val)}`}
+                    />
+                    <span className="text-[9px] text-white/70">{mesLabel(ym)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-white/50 mt-2">
+            <span className="inline-block w-2 h-2 rounded-sm bg-amber-400 align-middle" /> sobre el
+            promedio ·{" "}
+            <span className="inline-block w-2 h-2 rounded-sm bg-emerald-400/80 align-middle" /> debajo
+          </p>
+
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={() => router.push("/dashboard/proyectos")}
+              className="rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold"
+            >
+              📁 Proyectos
+            </button>
+            <button
+              onClick={exportarCSV}
+              disabled={gastos.length === 0}
+              className="rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+            >
+              ⬇ Exportar CSV
+            </button>
           </div>
         </div>
 
