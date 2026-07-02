@@ -613,8 +613,19 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **QA**: prueba E2E transaccional en BD simulando al usuario comité real (`set_config`
   jwt claims) con ROLLBACK: importar→auto-clasificar, dedup mismo hash, bandeja, clasificar+
   aprender, 2° pago del mismo proveedor propone el proyecto. `npm run build` limpio.
-- Pendiente de esta fase: backfill opcional de los ~151 egresos históricos del Excel
-  (dedup los protege si se re-suben), y crear proyectos reales (RFID, Bancas, Manguera).
+- **Backfill histórico ejecutado** (`scripts/backfill_gastos_2026.py`, idempotente): los 151
+  egresos del Excel del comité quedaron en `colonia_expenses` con `banco_hash` (dedup si se
+  re-sube el banco). Gotcha Excel: montos/saldos con formato fecha son SERIALES (serial =
+  días desde 1899-12-30 → `1902-01-19` = $750). Anti-dup con los 15 manuales previos:
+  12 se ENLAZARON por monto exacto + fecha ±5d (conservan la razón del comité; STEREN
+  $4285.89→$4285.98 corregido al banco). Proyectos creados y ligados: **Bancas para áreas
+  comunes** (4 pagos Home Depot) y **Manguera y aspersores** (enlazado al manual).
+  Total BD: $579,590.12 (154 gastos).
+- ⚠️ **2 dobles conteos detectados** (manuales sin evidencia que duplican filas del banco,
+  pendiente OK de Juan para borrar): "Mantenimiento alberca Mensual" $5,220 (05-mar, duplica
+  el pago mensual del banco) y "Reparación de Pistones" $3,828 (27-feb, = suma EXACTA de los
+  2 pagos del banco: anticipo $2,679 + liquidación $1,149, misma cuenta destino). "Garrafones
+  $174" sí es legítimo (efectivo, no está en el banco).
 
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
