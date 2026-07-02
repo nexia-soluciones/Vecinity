@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { runOrError } from "@/lib/rpc";
-import { CATEGORIAS, COLOR_CATEGORIA, canon } from "@/lib/categorias";
+import { COLOR_CATEGORIA, canon } from "@/lib/categorias";
 
 type Gasto = {
   id: string;
@@ -22,6 +22,7 @@ type Gasto = {
 };
 
 type Proyecto = { id: string; titulo: string; estado: string };
+type Cat = { id: string; nombre: string; activa: boolean; orden: number };
 
 // Edición en la bandeja "sin clasificar" y al RE-clasificar un gasto ya clasificado
 type Clasif = {
@@ -95,6 +96,13 @@ export default function GastosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clasif, setClasif] = useState<Record<string, Clasif>>({});
   const [filtro, setFiltro] = useState<string>(""); // "" = todas · categoría exacta · "__bien"
+  // Catálogo de categorías administrable (tabla expense_categories, migr. 041)
+  const [cats, setCats] = useState<Cat[]>([]);
+  const [gestorOpen, setGestorOpen] = useState(false);
+  const [nuevaCat, setNuevaCat] = useState("");
+  const [catMsg, setCatMsg] = useState<string | null>(null);
+  const [catBusy, setCatBusy] = useState(false);
+  const [editCat, setEditCat] = useState<Record<string, string>>({});
 
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState("");
@@ -107,6 +115,15 @@ export default function GastosPage() {
   const [busy, setBusy] = useState(false);
   const [listMsg, setListMsg] = useState<string | null>(null);
   const [borrando, setBorrando] = useState<Set<string>>(new Set());
+
+  const cargarCategorias = useCallback(async () => {
+    const { data } = await supabaseBrowser
+      .from("expense_categories")
+      .select("id, nombre, activa, orden")
+      .order("orden", { ascending: true })
+      .order("nombre", { ascending: true });
+    setCats((data as unknown as Cat[]) ?? []);
+  }, []);
 
   const cargarGastos = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
@@ -164,10 +181,43 @@ export default function GastosPage() {
       if (p.role !== "admin" && p.role !== "comite") return router.replace("/dashboard");
       setColoniaId(p.colonia_id);
       setUserId(user.id);
-      await cargarGastos();
+      await Promise.all([cargarGastos(), cargarCategorias()]);
       setReady(true);
     })();
-  }, [router, cargarGastos]);
+  }, [router, cargarGastos, cargarCategorias]);
+
+  // ---- Gestor de categorías (comité) ----------------------------------------
+  async function crearCategoria() {
+    const nombre = nuevaCat.trim();
+    if (!nombre) return;
+    setCatBusy(true);
+    setCatMsg(null);
+    const { data, error } = await supabaseBrowser.rpc("crear_categoria", { p_nombre: nombre });
+    setCatBusy(false);
+    if (error) return setCatMsg(error.message.replace(/^.*?:\s/, ""));
+    setNuevaCat("");
+    if ((data as { reactivada?: boolean })?.reactivada) setCatMsg("Esa categoría estaba desactivada — la reactivé.");
+    await cargarCategorias();
+  }
+
+  async function renombrarCategoria(id: string) {
+    const nombre = (editCat[id] ?? "").trim();
+    if (!nombre) return;
+    const { error } = await supabaseBrowser.rpc("renombrar_categoria", { p_id: id, p_nombre: nombre });
+    if (error) return setCatMsg(error.message.replace(/^.*?:\s/, ""));
+    setEditCat((m) => {
+      const n = { ...m };
+      delete n[id];
+      return n;
+    });
+    await Promise.all([cargarCategorias(), cargarGastos()]);
+  }
+
+  async function toggleCategoria(id: string, activa: boolean) {
+    const { error } = await supabaseBrowser.rpc("set_categoria_activa", { p_id: id, p_activa: activa });
+    if (error) return setCatMsg(error.message.replace(/^.*?:\s/, ""));
+    await cargarCategorias();
+  }
 
   async function subirArchivo(file: File): Promise<string | null> {
     if (!coloniaId) return null;
@@ -314,13 +364,22 @@ export default function GastosPage() {
       return acc;
     }, {})
   ).sort((a, b) => b[1] - a[1]);
-  const maxCat = porCat.length ? porCat[0][1] : 0;
   // Lista visible según el filtro activo (categoría o bienes)
   const clasificados = clasificadosTodos.filter((g) =>
     filtro === "" ? true : filtro === "__bien" ? g.es_bien : canon(g.categoria) === filtro
   );
   const nBienes = clasificadosTodos.filter((g) => g.es_bien).length;
   const proyNombre = (id: string | null) => proyectos.find((p) => p.id === id)?.titulo ?? null;
+
+  // Categorías activas para los dropdowns. Incluye el valor actual aunque esté
+  // desactivado (para no perder la selección al editar un gasto viejo).
+  const catsActivas = cats.filter((c) => c.activa).map((c) => c.nombre);
+  const opcionesCat = (actual?: string) =>
+    actual && !catsActivas.includes(actual) ? [actual, ...catsActivas] : catsActivas;
+  // Monto por categoría para el conteo de los chips
+  const montoCat: Record<string, number> = Object.fromEntries(porCat);
+  const countCat: Record<string, number> = {};
+  for (const g of clasificadosTodos) countCat[canon(g.categoria)] = (countCat[canon(g.categoria)] || 0) + 1;
 
   return (
     <main className="flex-1 bg-gradient-to-b from-brand-50 via-white to-sky-50">
@@ -378,7 +437,7 @@ export default function GastosPage() {
                           className="rounded-xl ring-1 ring-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-400"
                         >
                           <option value="">Categoría…</option>
-                          {CATEGORIAS.map((cat) => (
+                          {opcionesCat(c.categoria).map((cat) => (
                             <option key={cat} value={cat}>
                               {cat}
                             </option>
@@ -465,11 +524,11 @@ export default function GastosPage() {
           </div>
         </div>
 
-        {/* Desglose por categoría — clic en una barra filtra la lista de abajo */}
+        {/* Filtro por categoría — CHIPS (una pastilla por categoría con monto) */}
         {porCat.length > 0 && (
           <section className="mt-5">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-slate-700">Por categoría</h2>
+              <h2 className="text-sm font-bold text-slate-700">Filtrar por categoría</h2>
               {filtro !== "" && (
                 <button
                   onClick={() => setFiltro("")}
@@ -479,53 +538,152 @@ export default function GastosPage() {
                 </button>
               )}
             </div>
-            <ul className="flex flex-col gap-2.5">
-              {porCat.map(([cat, val]) => {
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFiltro("")}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                  filtro === ""
+                    ? "bg-brand-500 text-white ring-brand-500"
+                    : "bg-white text-slate-600 ring-slate-200 hover:ring-brand-300"
+                }`}
+              >
+                Todas ({clasificadosTodos.length})
+              </button>
+              {porCat.map(([cat]) => {
                 const activo = filtro === cat;
                 return (
-                  <li key={cat}>
-                    <button
-                      onClick={() => setFiltro(activo ? "" : cat)}
-                      className={`w-full text-left rounded-lg px-1.5 py-1 transition ${
-                        activo ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-700 font-medium">
-                          {activo && "▸ "}
-                          {cat}
-                        </span>
-                        <span className="text-slate-500">
-                          {money(val)} · {Math.round((val / total) * 100)}%
-                        </span>
-                      </div>
-                      <div className="mt-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className={`h-full ${COLOR_CATEGORIA[cat] ?? "bg-brand-500"}`}
-                          style={{ width: `${maxCat > 0 ? (val / maxCat) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </button>
-                  </li>
+                  <button
+                    key={cat}
+                    onClick={() => setFiltro(activo ? "" : cat)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                      activo
+                        ? "bg-brand-500 text-white ring-brand-500"
+                        : "bg-white text-slate-600 ring-slate-200 hover:ring-brand-300"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${COLOR_CATEGORIA[cat] ?? "bg-brand-400"}`}
+                    />
+                    {cat} ({countCat[cat] ?? 0})
+                  </button>
                 );
               })}
               {nBienes > 0 && (
-                <li>
-                  <button
-                    onClick={() => setFiltro(filtro === "__bien" ? "" : "__bien")}
-                    className={`w-full text-left rounded-lg px-1.5 py-1 text-sm transition ${
-                      filtro === "__bien"
-                        ? "bg-teal-50 ring-1 ring-teal-200 text-teal-800"
-                        : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {filtro === "__bien" && "▸ "}🪑 Bienes de la villa ({nBienes})
-                  </button>
-                </li>
+                <button
+                  onClick={() => setFiltro(filtro === "__bien" ? "" : "__bien")}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                    filtro === "__bien"
+                      ? "bg-teal-500 text-white ring-teal-500"
+                      : "bg-white text-teal-700 ring-teal-200 hover:ring-teal-300"
+                  }`}
+                >
+                  🪑 Bienes ({nBienes})
+                </button>
               )}
-            </ul>
+            </div>
+            {filtro !== "" && filtro !== "__bien" && (
+              <p className="mt-2 text-xs text-slate-500">
+                {countCat[filtro] ?? 0} gastos · {money(montoCat[filtro] ?? 0)} en {filtro}
+              </p>
+            )}
           </section>
         )}
+
+        {/* Gestor de categorías (comité): crear / renombrar / desactivar */}
+        <section className="mt-4">
+          <button
+            onClick={() => setGestorOpen((v) => !v)}
+            className="w-full flex items-center justify-between text-sm font-semibold text-slate-600 bg-white rounded-2xl ring-1 ring-slate-100 px-4 py-3 hover:ring-brand-200 transition"
+          >
+            <span>⚙️ Administrar categorías</span>
+            <span className="text-slate-400">{gestorOpen ? "▲" : "▼"}</span>
+          </button>
+          {gestorOpen && (
+            <div className="mt-2 bg-white rounded-2xl ring-1 ring-slate-100 p-4 flex flex-col gap-3">
+              {/* Crear nueva */}
+              <div className="flex gap-2">
+                <input
+                  value={nuevaCat}
+                  onChange={(e) => setNuevaCat(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && crearCategoria()}
+                  placeholder="Nueva categoría (ej. Insumos caseta)"
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                />
+                <button
+                  onClick={crearCategoria}
+                  disabled={catBusy || !nuevaCat.trim()}
+                  className="rounded-xl bg-brand-500 text-white text-sm font-bold px-4 disabled:opacity-40"
+                >
+                  ➕ Crear
+                </button>
+              </div>
+              {catMsg && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">{catMsg}</p>}
+              {/* Lista administrable */}
+              <ul className="flex flex-col gap-1.5">
+                {cats.map((cat) => {
+                  const editando = editCat[cat.id] !== undefined;
+                  return (
+                    <li
+                      key={cat.id}
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ring-1 ${
+                        cat.activa ? "bg-slate-50 ring-slate-100" : "bg-slate-100/60 ring-slate-200 opacity-60"
+                      }`}
+                    >
+                      {editando ? (
+                        <>
+                          <input
+                            value={editCat[cat.id]}
+                            onChange={(e) => setEditCat((m) => ({ ...m, [cat.id]: e.target.value }))}
+                            onKeyDown={(e) => e.key === "Enter" && renombrarCategoria(cat.id)}
+                            className="flex-1 rounded-lg ring-1 ring-brand-300 px-2 py-1 text-sm outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => renombrarCategoria(cat.id)}
+                            className="text-xs font-bold text-brand-600"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            onClick={() => setEditCat((m) => { const n = { ...m }; delete n[cat.id]; return n; })}
+                            className="text-xs text-slate-400"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-slate-700">
+                            {cat.nombre}
+                            {!cat.activa && <span className="text-[10px] text-slate-400"> · oculta</span>}
+                          </span>
+                          <button
+                            onClick={() => setEditCat((m) => ({ ...m, [cat.id]: cat.nombre }))}
+                            className="text-slate-400 hover:text-brand-600 px-1"
+                            title="Renombrar"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => toggleCategoria(cat.id, !cat.activa)}
+                            className="text-slate-400 hover:text-slate-700 px-1"
+                            title={cat.activa ? "Ocultar del menú" : "Reactivar"}
+                          >
+                            {cat.activa ? "⊘" : "↺"}
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[11px] text-slate-400">
+                Renombrar arrastra los gastos que ya usaban ese nombre. Ocultar no borra nada:
+                el histórico conserva su categoría, solo desaparece del menú al capturar.
+              </p>
+            </div>
+          )}
+        </section>
 
         {/* Registrar gasto */}
         <section className="mt-6">
@@ -559,7 +717,7 @@ export default function GastosPage() {
                 className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
               >
                 <option value="">Categoría…</option>
-                {CATEGORIAS.map((cat) => (
+                {opcionesCat(categoria).map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
@@ -711,7 +869,7 @@ export default function GastosPage() {
                             className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                           >
                             <option value="">Categoría…</option>
-                            {CATEGORIAS.map((cat) => (
+                            {opcionesCat(c.categoria).map((cat) => (
                               <option key={cat} value={cat}>
                                 {cat}
                               </option>

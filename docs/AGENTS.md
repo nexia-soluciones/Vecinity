@@ -648,7 +648,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   villa". Mismo patrón en `/dashboard/finanzas` (residente) sobre el detalle del mes.
   Flujo clave para Juan: filtrar "Otros" → reclasificar cada uno con ✎.
 - El servidor sigue aceptando texto libre en `clasificar_gasto` (no hay CHECK en BD); el
-  candado es la UI (dropdown). Si se necesita una categoría nueva → agregarla en categorias.ts.
+  candado es la UI (dropdown).
+
+## Sesión 2026-07-02 (4) — Categorías administrables + filtros en CHIPS
+- **Feedback de Juan**: (a) el filtro debía ser CHIPS visibles, no barras clicables;
+  (b) poder crear categorías desde la app (ej. "Insumos caseta"), no en código.
+- **Migración `041_expense_categories.sql`** (aplicada): tabla `vecino.expense_categories`
+  (colonia_id, nombre, activa, orden) con UNIQUE case-insensitive por colonia; sembradas las
+  21 canónicas + "Insumos caseta" (22 total). RPCs SECURITY DEFINER: `crear_categoria`
+  (o reactiva si estaba oculta), `renombrar_categoria` (**arrastra** colonia_expenses y
+  expense_cat_map al nuevo nombre), `set_categoria_activa` (ocultar sin borrar histórico).
+- **Gastos v3**: los dropdowns ahora leen `expense_categories` (no la constante); `opcionesCat`
+  incluye el valor actual aunque esté oculto (no pierde selección al editar gasto viejo).
+  **Filtro en fila de chips** (pastilla por categoría con punto de color + conteo, + "Todas" y
+  "🪑 Bienes"). **Gestor "⚙️ Administrar categorías"** colapsable: crear / renombrar (✎) /
+  ocultar (⊘) / reactivar (↺). `src/lib/categorias.ts` queda como semilla + COLOR + canon.
 
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
