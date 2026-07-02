@@ -289,6 +289,7 @@ export default function ConciliacionPage() {
           p_concepto: `Pago banco ${row.fecha} · ${row.concepto}`.slice(0, 200),
           p_banco_hash: row.hash,
           p_ref_key: row.refKey,
+          p_fecha: row.fecha || null,
         });
         if (!e2 && !(d2 as { dup?: boolean })?.dup) {
           auto++;
@@ -408,6 +409,7 @@ export default function ConciliacionPage() {
         p_concepto: `Pago banco ${row.fecha} · ${row.concepto}`.slice(0, 200),
         p_banco_hash: row.hash,
         p_ref_key: row.refKey,
+        p_fecha: row.fecha || null,
       });
       if (error) {
         err++;

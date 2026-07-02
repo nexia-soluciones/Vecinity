@@ -31,6 +31,24 @@ Flujo recomendado al comité: **Auto-conciliar primero** (limpia rastreo + propo
 propuestas → luego "Conciliar seleccionados" para lo que quedó a mano. Evita crear abonos duplicados sobre
 comprobantes que el vecino ya subió. Build + tsc + eslint en verde.
 
+### Candado anti-duplicado en `conciliar_abono` (migración 037) + corrección de datos ✅
+
+En la primera tanda de conciliación real, "Conciliar seleccionados" creó **abonos duplicados** en 3 casas
+(**252, 161, 105**): el vecino ya había subido su comprobante y el comité además concilió la fila del banco,
+que insertaba un abono NUEVO sin revisar. Corregido en dos frentes:
+- **Datos (ya aplicado en prod):** se rechazó el stub del banco de las 3 casas y se conservó el comprobante
+  del vecino (con foto+rastreo); en la 105 el comprobante estaba `pendiente` → se aprobó. Las 3 quedaron en
+  **saldo $0, al corriente**. Barrido de la colonia: solo esos 3 casos; saldos a favor de 103/234 son
+  crédito previo legítimo, no de la conciliación. El `banco_hash` se dejó en el stub rechazado (el dedup
+  por existencia sigue protegiendo contra re-importar esa fila del banco).
+- **Código (migración 037):** `conciliar_abono` ahora, ANTES de insertar, busca un comprobante del vecino
+  ya existente (misma casa · mismo monto · ±3 días · con `comprobante_url` · sin `banco_hash`) y lo **ENLAZA**
+  (aprueba si estaba pendiente, aplica saldo UNA vez; solo estampa `banco_hash` si ya estaba aprobado). Solo
+  crea un abono nuevo si el vecino NO subió comprobante (el banco es la única evidencia). Nuevo param opcional
+  `p_fecha` (fecha de la fila del banco) para acotar el match; ambos llamadores del UI lo pasan. Verificado
+  E2E con test en transacción+ROLLBACK simulando al comité: `linked:true`, 1 fila (no duplica), comprobante
+  aprobado + `banco_hash` estampado.
+
 ## Recibo foliado de abonos (paridad Django) + backfill resoluciones (2026-07-02) ✅
 
 **Recibo de abonos:** el Django viejo generaba, al aprobar un abono, un **recibo PDF foliado**
