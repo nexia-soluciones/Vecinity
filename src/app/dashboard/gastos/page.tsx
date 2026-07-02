@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { runOrError } from "@/lib/rpc";
+import { CATEGORIAS, COLOR_CATEGORIA, canon } from "@/lib/categorias";
 
 type Gasto = {
   id: string;
@@ -50,25 +51,6 @@ const hoyISO = () => {
   ).padStart(2, "0")}`;
 };
 
-// Colores fijos por categoría conocida (cae a gris si no está)
-const COLOR: Record<string, string> = {
-  Vigilancia_Insumos: "bg-slate-600",
-  Vigilancia: "bg-slate-600",
-  CFE: "bg-amber-500",
-  "CFE (Luz)": "bg-amber-500",
-  Jardineria: "bg-emerald-500",
-  Jardinería: "bg-emerald-500",
-  Alberca: "bg-sky-500",
-  Fumigacion: "bg-lime-600",
-  Fumigación: "bg-lime-600",
-  SAT: "bg-red-500",
-  "Impuestos (SAT)": "bg-red-500",
-  Basura: "bg-orange-500",
-  Limpieza: "bg-cyan-600",
-  "JUMAPA (Agua)": "bg-blue-500",
-  Otros: "bg-purple-500",
-};
-
 // Deriva la "firma" del proveedor del concepto del banco, para que el sistema
 // aprenda proveedor→categoría (expense_cat_map). Es un substring LITERAL que
 // reaparecerá en pagos futuros al mismo proveedor. El admin puede editarla.
@@ -112,6 +94,7 @@ export default function GastosPage() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clasif, setClasif] = useState<Record<string, Clasif>>({});
+  const [filtro, setFiltro] = useState<string>(""); // "" = todas · categoría exacta · "__bien"
 
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState("");
@@ -230,7 +213,7 @@ export default function GastosPage() {
       ...m,
       [g.id]: {
         concepto: g.concepto,
-        categoria: g.categoria,
+        categoria: canon(g.categoria),
         improvementId: g.improvement_id ?? "",
         keyword: "",
         esBien: g.es_bien,
@@ -323,18 +306,20 @@ export default function GastosPage() {
     );
 
   const bandeja = gastos.filter((g) => g.estado === "sin_clasificar");
-  const clasificados = gastos.filter((g) => g.estado !== "sin_clasificar");
+  const clasificadosTodos = gastos.filter((g) => g.estado !== "sin_clasificar");
   const total = gastos.reduce((s, g) => s + Number(g.monto), 0);
   const porCat = Object.entries(
-    clasificados.reduce<Record<string, number>>((acc, g) => {
-      acc[g.categoria] = (acc[g.categoria] || 0) + Number(g.monto);
+    clasificadosTodos.reduce<Record<string, number>>((acc, g) => {
+      acc[canon(g.categoria)] = (acc[canon(g.categoria)] || 0) + Number(g.monto);
       return acc;
     }, {})
   ).sort((a, b) => b[1] - a[1]);
   const maxCat = porCat.length ? porCat[0][1] : 0;
-  const sugerencias = Array.from(
-    new Set([...Object.keys(COLOR), ...gastos.map((g) => g.categoria)])
+  // Lista visible según el filtro activo (categoría o bienes)
+  const clasificados = clasificadosTodos.filter((g) =>
+    filtro === "" ? true : filtro === "__bien" ? g.es_bien : canon(g.categoria) === filtro
   );
+  const nBienes = clasificadosTodos.filter((g) => g.es_bien).length;
   const proyNombre = (id: string | null) => proyectos.find((p) => p.id === id)?.titulo ?? null;
 
   return (
@@ -387,13 +372,18 @@ export default function GastosPage() {
                         className="w-full rounded-xl ring-1 ring-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-400"
                       />
                       <div className="grid grid-cols-2 gap-2">
-                        <input
+                        <select
                           value={c.categoria}
                           onChange={(e) => setC(g.id, { categoria: e.target.value })}
-                          list="cats"
-                          placeholder="Categoría"
                           className="rounded-xl ring-1 ring-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-400"
-                        />
+                        >
+                          <option value="">Categoría…</option>
+                          {CATEGORIAS.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
                         <select
                           value={c.improvementId}
                           onChange={(e) => setC(g.id, { improvementId: e.target.value })}
@@ -475,27 +465,64 @@ export default function GastosPage() {
           </div>
         </div>
 
-        {/* Desglose por categoría */}
+        {/* Desglose por categoría — clic en una barra filtra la lista de abajo */}
         {porCat.length > 0 && (
           <section className="mt-5">
-            <h2 className="text-sm font-bold text-slate-700 mb-2">Por categoría</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold text-slate-700">Por categoría</h2>
+              {filtro !== "" && (
+                <button
+                  onClick={() => setFiltro("")}
+                  className="text-xs font-semibold text-brand-600 hover:underline"
+                >
+                  ✕ Quitar filtro
+                </button>
+              )}
+            </div>
             <ul className="flex flex-col gap-2.5">
-              {porCat.map(([cat, val]) => (
-                <li key={cat}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700 font-medium">{cat}</span>
-                    <span className="text-slate-500">
-                      {money(val)} · {Math.round((val / total) * 100)}%
-                    </span>
-                  </div>
-                  <div className="mt-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full ${COLOR[cat] ?? "bg-brand-500"}`}
-                      style={{ width: `${maxCat > 0 ? (val / maxCat) * 100 : 0}%` }}
-                    />
-                  </div>
+              {porCat.map(([cat, val]) => {
+                const activo = filtro === cat;
+                return (
+                  <li key={cat}>
+                    <button
+                      onClick={() => setFiltro(activo ? "" : cat)}
+                      className={`w-full text-left rounded-lg px-1.5 py-1 transition ${
+                        activo ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700 font-medium">
+                          {activo && "▸ "}
+                          {cat}
+                        </span>
+                        <span className="text-slate-500">
+                          {money(val)} · {Math.round((val / total) * 100)}%
+                        </span>
+                      </div>
+                      <div className="mt-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full ${COLOR_CATEGORIA[cat] ?? "bg-brand-500"}`}
+                          style={{ width: `${maxCat > 0 ? (val / maxCat) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+              {nBienes > 0 && (
+                <li>
+                  <button
+                    onClick={() => setFiltro(filtro === "__bien" ? "" : "__bien")}
+                    className={`w-full text-left rounded-lg px-1.5 py-1 text-sm transition ${
+                      filtro === "__bien"
+                        ? "bg-teal-50 ring-1 ring-teal-200 text-teal-800"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {filtro === "__bien" && "▸ "}🪑 Bienes de la villa ({nBienes})
+                  </button>
                 </li>
-              ))}
+              )}
             </ul>
           </section>
         )}
@@ -526,13 +553,18 @@ export default function GastosPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <input
+              <select
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value)}
-                list="cats"
-                placeholder="Categoría"
                 className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-              />
+              >
+                <option value="">Categoría…</option>
+                {CATEGORIAS.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
               <select
                 value={proyectoId}
                 onChange={(e) => setProyectoId(e.target.value)}
@@ -546,11 +578,6 @@ export default function GastosPage() {
                 ))}
               </select>
             </div>
-            <datalist id="cats">
-              {sugerencias.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
             <input
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
@@ -583,9 +610,20 @@ export default function GastosPage() {
 
         {/* Lista de gastos */}
         <section className="mt-6 mb-6">
-          <h2 className="text-sm font-bold text-slate-700 mb-2">
-            Movimientos <span className="text-slate-400 font-medium">({gastos.length})</span>
-          </h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-slate-700">
+              Movimientos{" "}
+              <span className="text-slate-400 font-medium">({clasificados.length})</span>
+            </h2>
+            {filtro !== "" && (
+              <span className="text-xs font-semibold text-brand-700 bg-brand-50 rounded-full px-2.5 py-0.5">
+                {filtro === "__bien" ? "🪑 Bienes" : filtro}
+                <button onClick={() => setFiltro("")} className="ml-1.5 text-brand-500">
+                  ✕
+                </button>
+              </span>
+            )}
+          </div>
           {listMsg && (
             <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200 mb-2">
               {listMsg}
@@ -667,13 +705,18 @@ export default function GastosPage() {
                           className="w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                         />
                         <div className="grid grid-cols-2 gap-2">
-                          <input
+                          <select
                             value={c.categoria}
                             onChange={(e) => setC(g.id, { categoria: e.target.value })}
-                            list="cats"
-                            placeholder="Categoría"
                             className="rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-                          />
+                          >
+                            <option value="">Categoría…</option>
+                            {CATEGORIAS.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
                           <select
                             value={c.improvementId}
                             onChange={(e) => setC(g.id, { improvementId: e.target.value })}

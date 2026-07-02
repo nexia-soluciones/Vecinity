@@ -635,6 +635,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   NOTA: banco 17-may tiene "MANTTO JUEGO INFANTIL 1 DE 3" $700 (mismo trabajador, pagos 1/2/3
   de 3) — el "3 de 3" aún no aparece en el estado de cuenta.
 
+## Sesión 2026-07-02 (3) — Categorías canónicas (dropdowns) + filtros
+- **`src/lib/categorias.ts`** (nueva, fuente única): lista CERRADA de 21 categorías canónicas
+  + `COLOR_CATEGORIA` + `canon()` (mapa formas viejas→canónica). Reemplaza los inputs de
+  texto libre (`<input list="cats">`) por `<select>` en captura manual, bandeja y edición
+  inline → **evita typos y duplicados de captura**.
+- **BD normalizada** (una sola pasada): fusionadas las variantes que ya se habían colado —
+  Jardineria→Jardinería, SAT/Impuestos→Impuestos (SAT), CFE→CFE (Luz), Vigilancia_Insumos→
+  Vigilancia, Fumigacion→Fumigación. De 23 categorías sucias a 18 limpias.
+- **Filtros**: en `/dashboard/gastos` el desglose "Por categoría" es clicable → filtra la
+  lista de Movimientos (chip activo + contador + botón ✕), incluye un filtro "🪑 Bienes de la
+  villa". Mismo patrón en `/dashboard/finanzas` (residente) sobre el detalle del mes.
+  Flujo clave para Juan: filtrar "Otros" → reclasificar cada uno con ✎.
+- El servidor sigue aceptando texto libre en `clasificar_gasto` (no hay CHECK en BD); el
+  candado es la UI (dropdown). Si se necesita una categoría nueva → agregarla en categorias.ts.
+
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).

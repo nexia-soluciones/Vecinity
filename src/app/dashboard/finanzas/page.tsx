@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { COLOR_CATEGORIA, canon } from "@/lib/categorias";
 
 // Transparencia financiera — visible para TODO residente aprobado.
 // Tanto las entradas como los gastos tienen una razón: los ingresos ya vienen
@@ -85,6 +86,7 @@ export default function FinanzasPage() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [mes, setMes] = useState(() => mesMX(new Date().toISOString()));
   const [proyAbierto, setProyAbierto] = useState<string | null>(null);
+  const [filtroCat, setFiltroCat] = useState<string>(""); // "" = todas
 
   useEffect(() => {
     (async () => {
@@ -144,10 +146,14 @@ export default function FinanzasPage() {
 
   const porCat = useMemo(() => {
     const acc: Record<string, number> = {};
-    for (const g of gastosMes) acc[g.categoria] = (acc[g.categoria] || 0) + Number(g.monto);
+    for (const g of gastosMes) acc[canon(g.categoria)] = (acc[canon(g.categoria)] || 0) + Number(g.monto);
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   }, [gastosMes]);
   const maxCat = porCat.length ? porCat[0][1] : 0;
+  const gastosMesFiltrados = useMemo(
+    () => (filtroCat ? gastosMes.filter((g) => canon(g.categoria) === filtroCat) : gastosMes),
+    [gastosMes, filtroCat]
+  );
 
   const proyNombre = (id: string | null) => proyectos.find((p) => p.id === id)?.titulo ?? null;
   const gastadoDe = (id: string) =>
@@ -207,25 +213,48 @@ export default function FinanzasPage() {
           </div>
         </div>
 
-        {/* Gastos por categoría */}
+        {/* Gastos por categoría — clic filtra el detalle de abajo */}
         {porCat.length > 0 && (
           <section className="mt-5">
-            <h2 className="text-sm font-bold text-slate-700 mb-2">Gastos por categoría</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold text-slate-700">Gastos por categoría</h2>
+              {filtroCat !== "" && (
+                <button
+                  onClick={() => setFiltroCat("")}
+                  className="text-xs font-semibold text-brand-600 hover:underline"
+                >
+                  ✕ Quitar filtro
+                </button>
+              )}
+            </div>
             <ul className="flex flex-col gap-2.5 bg-white rounded-2xl ring-1 ring-slate-100 p-4">
-              {porCat.map(([cat, val]) => (
-                <li key={cat}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700 font-medium">{cat}</span>
-                    <span className="text-slate-500">{money(val)}</span>
-                  </div>
-                  <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full bg-brand-500"
-                      style={{ width: `${maxCat > 0 ? (val / maxCat) * 100 : 0}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
+              {porCat.map(([cat, val]) => {
+                const activo = filtroCat === cat;
+                return (
+                  <li key={cat}>
+                    <button
+                      onClick={() => setFiltroCat(activo ? "" : cat)}
+                      className={`w-full text-left rounded-lg px-1.5 py-1 transition ${
+                        activo ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700 font-medium">
+                          {activo && "▸ "}
+                          {cat}
+                        </span>
+                        <span className="text-slate-500">{money(val)}</span>
+                      </div>
+                      <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full ${COLOR_CATEGORIA[cat] ?? "bg-brand-500"}`}
+                          style={{ width: `${maxCat > 0 ? (val / maxCat) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -233,15 +262,17 @@ export default function FinanzasPage() {
         {/* Detalle de gastos del mes */}
         <section className="mt-5">
           <h2 className="text-sm font-bold text-slate-700 mb-2">
-            Detalle de gastos <span className="text-slate-400 font-medium">({gastosMes.length})</span>
+            Detalle de gastos{" "}
+            <span className="text-slate-400 font-medium">({gastosMesFiltrados.length})</span>
+            {filtroCat && <span className="text-brand-600 font-medium"> · {filtroCat}</span>}
           </h2>
-          {gastosMes.length === 0 ? (
+          {gastosMesFiltrados.length === 0 ? (
             <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
-              Sin gastos registrados este mes.
+              Sin gastos {filtroCat ? `de ${filtroCat}` : "registrados"} este mes.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {gastosMes.map((g) => (
+              {gastosMesFiltrados.map((g) => (
                 <li
                   key={g.id}
                   className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
