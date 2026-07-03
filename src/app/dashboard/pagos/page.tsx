@@ -17,6 +17,8 @@ type Mov = {
   created_at: string;
 };
 type Pend = Mov & { house: { numero: string } | null };
+// Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
+type CasaFin = { id: string; numero: string; propia: boolean };
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
@@ -30,6 +32,7 @@ export default function PagosPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [houseId, setHouseId] = useState<string | null>(null);
+  const [casas, setCasas] = useState<CasaFin[]>([]);
   const [coloniaId, setColoniaId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [saldo, setSaldo] = useState(0);
@@ -94,13 +97,36 @@ export default function PagosPage() {
         approval_status: string;
       } | null;
       if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
-      setHouseId(p.house_id);
       setColoniaId(p.colonia_id);
       const admin = p.role === "admin" || p.role === "comite";
       setIsAdmin(admin);
+
+      // Casas financieras: donde vivo + donde soy propietario (casas rentadas)
+      const lista: CasaFin[] = [];
       if (p.house_id) {
-        await cargarSaldo(p.house_id);
-        await cargarMovs(p.house_id);
+        const { data: h } = await supabaseBrowser
+          .from("houses")
+          .select("id, numero")
+          .eq("id", p.house_id)
+          .maybeSingle();
+        const mia = h as unknown as { id: string; numero: string } | null;
+        if (mia) lista.push({ id: mia.id, numero: mia.numero, propia: true });
+      }
+      const { data: hm } = await supabaseBrowser
+        .from("house_members")
+        .select("house_id, house:houses(numero)")
+        .eq("profile_id", user.id);
+      for (const m of (hm as unknown as { house_id: string; house: { numero: string } | null }[]) ?? []) {
+        if (!lista.some((c) => c.id === m.house_id))
+          lista.push({ id: m.house_id, numero: m.house?.numero ?? "?", propia: false });
+      }
+      setCasas(lista);
+
+      const inicial = lista[0]?.id ?? null;
+      setHouseId(inicial);
+      if (inicial) {
+        await cargarSaldo(inicial);
+        await cargarMovs(inicial);
       }
       if (admin) await cargarPend();
       setReady(true);
@@ -134,6 +160,7 @@ export default function PagosPage() {
         p_comprobante_url: url,
         p_concepto: "Abono",
         p_comprobante_hash: hash,
+        p_house_id: houseId,
       });
       if (error) throw new Error(error.message.replace(/^.*?:\s/, ""));
       // OCR del comprobante (best-effort): extrae la clave de rastreo para que el
@@ -225,6 +252,30 @@ export default function PagosPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Pagos</h1>
+
+        {/* Selector de casa (dueño con 2+ casas o dueño que también vive aquí) */}
+        {casas.length > 1 && (
+          <div className="mt-3 flex gap-2 flex-wrap">
+            {casas.map((c) => (
+              <button
+                key={c.id}
+                onClick={async () => {
+                  setHouseId(c.id);
+                  await cargarSaldo(c.id);
+                  await cargarMovs(c.id);
+                }}
+                className={`rounded-xl px-3 py-1.5 text-sm font-semibold ring-1 transition ${
+                  houseId === c.id
+                    ? "bg-brand-500 text-white ring-brand-500"
+                    : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                Casa {c.numero}
+                {!c.propia && <span className="ml-1 text-[10px] opacity-80">dueño</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Saldo */}
         {casaNum && (

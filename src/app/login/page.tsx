@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export default function Login() {
@@ -12,6 +12,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linked, setLinked] = useState(false);
+
+  // ?linked=1 → venía del onboarding PROP con cuenta existente
+  useEffect(() => {
+    setLinked(new URLSearchParams(window.location.search).get("linked") === "1");
+  }, []);
 
   async function entrar() {
     setError(null);
@@ -41,6 +47,12 @@ export default function Login() {
 
         <section className="w-full bg-white rounded-3xl shadow-[0_10px_40px_-12px_rgba(16,185,129,0.25)] ring-1 ring-slate-100 p-6 sm:p-7">
           <h1 className="text-xl font-bold text-slate-800 mb-5">Iniciar sesión</h1>
+          {linked && (
+            <p className="mb-4 text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2 ring-1 ring-emerald-200">
+              Tu cuenta ya existía: te ligamos la casa como propietario. Entra con tu
+              contraseña de siempre.
+            </p>
+          )}
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}

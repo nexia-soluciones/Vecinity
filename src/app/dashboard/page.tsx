@@ -20,6 +20,8 @@ type Profile = {
 // Bot de Telegram (Caty). Deep-link de vinculación: t.me/<bot>?start=vecino_<profileId>
 const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT;
 type House = { numero: string; street: string | null; saldo: number };
+// Casa donde NO vivo pero soy propietario (casa rentada) — solo finanzas
+type CasaPropia = { id: string; numero: string; street: string | null; saldo: number };
 type Pending = { id: string; nombre: string; email: string; created_at: string };
 
 const money = (n: number) =>
@@ -44,6 +46,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [house, setHouse] = useState<House | null>(null);
+  const [casasPropias, setCasasPropias] = useState<CasaPropia[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
   const [sosState, setSosState] = useState<"idle" | "holding" | "sending" | "sent" | "error">(
     "idle"
@@ -97,6 +100,19 @@ export default function Dashboard() {
           .maybeSingle();
         setHouse(h as unknown as House | null);
       }
+      // Casas donde soy propietario sin vivir ahí (rentadas)
+      const { data: hm } = await supabaseBrowser
+        .from("house_members")
+        .select("house_id, house:houses(numero, street, saldo)")
+        .eq("profile_id", user.id);
+      setCasasPropias(
+        ((hm as unknown as {
+          house_id: string;
+          house: { numero: string; street: string | null; saldo: number } | null;
+        }[]) ?? [])
+          .filter((m) => m.house && m.house_id !== p.house_id)
+          .map((m) => ({ id: m.house_id, ...m.house! }))
+      );
       const esAdmin = p.role === "admin" || p.role === "comite";
       if (esAdmin) await loadPending();
       // Badge de no leídos: solo para el residente (sus comunicados dirigidos).
@@ -221,6 +237,9 @@ export default function Dashboard() {
 
   const saldo = house?.saldo ?? 0;
   const conAdeudo = saldo > 0;
+  // Dueño externo puro: no vive en la colonia, solo administra casas rentadas.
+  // Ve finanzas de sus casas; sin visitas, reservas, vehículos, incidencias ni SOS.
+  const soloPropietario = !profile?.house_id && casasPropias.length > 0;
 
   return (
     <main className="flex-1 bg-gradient-to-b from-brand-50 via-white to-sky-50">
@@ -273,6 +292,32 @@ export default function Dashboard() {
           </button>
         )}
 
+        {/* Casas rentadas de las que soy dueño — solo finanzas */}
+        {casasPropias.map((c) => {
+          const debe = Number(c.saldo) > 0;
+          return (
+            <button
+              key={c.id}
+              onClick={() => router.push("/dashboard/pagos")}
+              className={`mt-5 w-full text-left rounded-3xl p-5 text-white shadow-lg transition hover:brightness-105 ${
+                debe
+                  ? "bg-gradient-to-br from-amber-500 to-orange-600"
+                  : "bg-gradient-to-br from-slate-600 to-slate-800"
+              }`}
+            >
+              <p className="text-white/80 text-sm">
+                Casa {c.numero}
+                {c.street ? ` · ${c.street}` : ""} · <span className="font-semibold">tu propiedad</span>
+              </p>
+              <p className="text-3xl font-extrabold mt-1">{money(Number(c.saldo))}</p>
+              <p className="text-white/90 text-sm mt-1 flex items-center justify-between">
+                <span>{debe ? "Saldo pendiente por pagar" : "Al corriente ✓"}</span>
+                <span className="text-white/90">Pagar ›</span>
+              </p>
+            </button>
+          );
+        })}
+
         {/* Conectar Caty (Telegram) — solo si el residente aún no está vinculado */}
         {profile && !profile.telegram_chat_id && TELEGRAM_BOT && (
           <div className="mt-5 w-full rounded-3xl bg-white ring-1 ring-sky-200 p-4 shadow-sm">
@@ -322,7 +367,8 @@ export default function Dashboard() {
           )}
         </button>
 
-        {/* Reservar áreas comunes (función activa) */}
+        {/* Reservar áreas comunes (función activa) — no aplica al dueño externo */}
+        {!soloPropietario && (
         <button
           onClick={() => router.push("/dashboard/reservas")}
           className="mt-5 w-full rounded-3xl bg-white ring-1 ring-brand-200 p-4 flex items-center gap-3 text-left hover:ring-brand-300 transition shadow-sm"
@@ -334,17 +380,23 @@ export default function Dashboard() {
           </span>
           <span className="ml-auto text-brand-500 text-xl">›</span>
         </button>
+        )}
 
         {/* Acciones rápidas */}
         <div className="grid grid-cols-2 gap-3 mt-3">
           <Action emoji="💳" label="Pagar / Subir comprobante" onClick={() => router.push("/dashboard/pagos")} />
-          <Action emoji="🚗" label="Mis vehículos" onClick={() => router.push("/dashboard/vehiculos")} />
-          <Action emoji="👮" label="Registrar visita" onClick={() => router.push("/dashboard/visitas")} />
-          <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
+          {!soloPropietario && (
+            <>
+              <Action emoji="🚗" label="Mis vehículos" onClick={() => router.push("/dashboard/vehiculos")} />
+              <Action emoji="👮" label="Registrar visita" onClick={() => router.push("/dashboard/visitas")} />
+              <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
+            </>
+          )}
           <Action emoji="📊" label="Finanzas de la colonia" onClick={() => router.push("/dashboard/finanzas")} />
         </div>
 
-        {/* Botón SOS — mantener presionado para activar */}
+        {/* Botón SOS — mantener presionado para activar (no aplica al dueño externo) */}
+        {!soloPropietario && (
         <button
           onPointerDown={startHold}
           onPointerUp={cancelHold}
@@ -373,6 +425,7 @@ export default function Dashboard() {
               : "🆘 Botón de pánico — mantén presionado"}
           </span>
         </button>
+        )}
 
         {/* Panel comité — aprobaciones */}
         {isAdmin && (

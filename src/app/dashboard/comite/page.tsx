@@ -54,6 +54,10 @@ export default function PanelComite() {
   const [cvBusy, setCvBusy] = useState(false);
   const [convMsg, setConvMsg] = useState<string | null>(null);
   const [cerrando, setCerrando] = useState<Set<string>>(new Set());
+  const [propCasa, setPropCasa] = useState("");
+  const [propMsg, setPropMsg] = useState<string | null>(null);
+  const [propToken, setPropToken] = useState<string | null>(null);
+  const [propBusy, setPropBusy] = useState(false);
 
   const cargarFinanzas = useCallback(async () => {
     const [abonos, vehiculos, incidencias, vecinos] = await Promise.all([
@@ -163,6 +167,36 @@ export default function PanelComite() {
       await Promise.all([cargarConvenios(), cargarFinanzas()]);
     } finally {
       setCvBusy(false);
+    }
+  }
+
+  async function generarCodigoPropietario() {
+    if (propBusy) return; // evita doble-tap
+    setPropMsg(null);
+    setPropToken(null);
+    if (!propCasa.trim()) return setPropMsg("Escribe el número de casa.");
+    setPropBusy(true);
+    try {
+      const { data: h } = await supabaseBrowser
+        .from("houses")
+        .select("id")
+        .eq("numero", propCasa.trim())
+        .maybeSingle();
+      const house = h as unknown as { id: string } | null;
+      if (!house) return setPropMsg(`No encontré la casa ${propCasa}.`);
+      const { data, error } = await supabaseBrowser.rpc("crear_invitacion_propietario", {
+        p_house_id: house.id,
+      });
+      if (error) return setPropMsg(error.message.replace(/^.*?:\s/, ""));
+      const r = data as unknown as { ok: boolean; token: string; nueva: boolean };
+      setPropToken(r.token);
+      setPropMsg(
+        r.nueva
+          ? "Código generado. Compártelo con el dueño de la casa."
+          : "Esta casa ya tenía un código vigente sin usar — es este."
+      );
+    } finally {
+      setPropBusy(false);
     }
   }
 
@@ -442,6 +476,42 @@ export default function PanelComite() {
               })}
             </ul>
           )}
+        </section>
+
+        {/* Código de propietario (casas rentadas) */}
+        <section className="mt-6">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">Acceso para propietario</h2>
+          <div className="bg-white rounded-2xl ring-1 ring-slate-100 p-3 flex flex-col gap-2">
+            <p className="text-xs text-slate-500">
+              Para casas rentadas: genera un código <b>PROP</b> para el dueño que no vive
+              ahí. Solo le da acceso a pagos y estado de cuenta de su casa.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={propCasa}
+                onChange={(e) => setPropCasa(e.target.value)}
+                placeholder="Casa"
+                className="w-24 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+              />
+              <button
+                onClick={generarCodigoPropietario}
+                disabled={propBusy}
+                className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+              >
+                {propBusy ? "Generando…" : "Generar código"}
+              </button>
+            </div>
+            {propToken && (
+              <button
+                onClick={() => navigator.clipboard?.writeText(propToken)}
+                className="rounded-xl bg-slate-800 text-white font-mono text-lg py-2.5 tracking-wider active:scale-[0.99]"
+                title="Toca para copiar"
+              >
+                {propToken}
+              </button>
+            )}
+            {propMsg && <p className="text-xs text-slate-600">{propMsg}</p>}
+          </div>
         </section>
 
         {/* Top morosos */}

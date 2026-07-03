@@ -54,6 +54,13 @@ export default function Onboarding() {
       setLoading(false);
       return setError(res.error ?? "No se pudo crear la cuenta.");
     }
+    if (res.linked) {
+      // Ya tenía cuenta: se le ligó la casa como propietario; entra con su
+      // contraseña de siempre (la que escribió aquí no reemplaza la suya).
+      setLoading(false);
+      router.push("/login?linked=1");
+      return;
+    }
     setProfileId(res.profileId ?? null);
     // Iniciar sesión para dejar la sesión activa
     await supabaseBrowser.auth.signInWithPassword({

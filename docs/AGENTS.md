@@ -688,6 +688,34 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   con la foto/ubicación + input para asignar casa → pasa a la bandeja de pendientes. "Mis
   reportes" muestra "por identificar / en identificación" (badge azul). Verificado E2E con
   rollback (sin foto rechazado, sin_identificar creado, identificado→pendiente).
+
+## Sesión 2026-07-03 (3) — Propietarios de casas rentadas (código PROP)
+- Problema: ~30% de casas rentadas; el inquilino usó el código CAT, pero el mantenimiento lo
+  paga el DUEÑO, que no existía en el sistema. **Migración `044_propietarios.sql`** (aplicada):
+  - `vecino.house_members` (colonia, casa, perfil, `relacion` enum `propietario`) — vínculo
+    persona↔casa por relación; `profiles.house_id` sigue siendo "donde VIVO" (NULL para dueño
+    externo). Soporta dueño con 2+ casas y dueño que vive en una casa y renta otra.
+  - **Alcance en BD, no en UI**: `my_finance_house_ids()` (vivo ∪ propietario) SOLO en
+    superficies financieras: policy `transactions_read`, `registrar_abono` (nuevo arg
+    `p_house_id`, colonia derivada de la CASA; DROP de la firma de 4 args para no crear
+    sobrecarga ambigua en PostgREST), `set_abono_ocr`. Visitas/reservas/vehículos/incidencias/
+    SOS siguen con `my_house_id()` → NULL para el dueño = sin acceso por diseño.
+  - `crear_invitacion_propietario(house_id)` (admin): genera/reusa código `PROP-<casa>`
+    idempotente en `invitations` (columna nueva `relacion`). `notify_saldo` ahora avisa a
+    TODOS los ligados con Telegram (residentes + dueños — el dueño es quien paga).
+- **Onboarding** (`actions.ts`): código PROP → perfil con `house_id` NULL + fila en
+  `house_members`, auto-aprobado. Si el correo YA tiene cuenta (dueño que vive en la colonia)
+  → solo se liga la casa (`linked:true`) y `/login?linked=1` muestra banner "entra con tu
+  contraseña de siempre".
+- **Frontend**: comité genera el código en el panel (sección "Acceso para propietario",
+  tap-para-copiar). Dashboard: tarjeta por casa propia (gris "tu propiedad" / ámbar con
+  adeudo); dueño externo puro NO ve reservas, vehículos, visitas, incidencias ni SOS.
+  `/dashboard/pagos`: chips selector de casa si tienes 2+ (vivo+propias), `registrar_abono`
+  manda `p_house_id`.
+- **QA en prod con rollback (10/10)**: dueño ve/abona SOLO su casa; no ve transactions ni
+  house_members ajenos; `my_house_id()` NULL; residente intacto (abono sin arg); PROP
+  idempotente. Patrón DO + `set_config(jwt.claims)` + `SET LOCAL ROLE authenticated` +
+  RAISE final.
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
