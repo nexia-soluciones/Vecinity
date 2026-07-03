@@ -489,6 +489,28 @@ function ResolverItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void 
   const [reinc, setReinc] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [itemErr, setItemErr] = useState<string | null>(null);
+  // Corregir la casa infractora si el vecino reportó mal (comité, migr. 042)
+  const [numeroCasa, setNumeroCasa] = useState<string>(r.infractor?.numero ?? "");
+  const [editCasa, setEditCasa] = useState(false);
+  const [nuevoNum, setNuevoNum] = useState("");
+  const [casaBusy, setCasaBusy] = useState(false);
+
+  async function corregirCasa() {
+    const num = nuevoNum.trim();
+    if (!num || casaBusy) return;
+    setCasaBusy(true);
+    setItemErr(null);
+    const res = await callRpc<{ numero: string }>("corregir_casa_infractora", {
+      p_id: r.id,
+      p_numero: num,
+    });
+    setCasaBusy(false);
+    if (!res.ok) return setItemErr(res.error);
+    setNumeroCasa(res.data.numero);
+    setEditCasa(false);
+    setNuevoNum("");
+    await cargarContexto(); // placas y reincidencia dependen de la casa infractora
+  }
 
   async function cargarContexto() {
     // placas del infractor + sugerencia por reincidencia (vía RPC con ids reales)
@@ -549,9 +571,52 @@ function ResolverItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void 
 
   return (
     <li className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
-      <p className="font-semibold text-slate-800">
-        {r.categoria?.nombre ?? "Incidencia"} · Casa {r.infractor?.numero ?? "—"}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-slate-800">
+          {r.categoria?.nombre ?? "Incidencia"} · Casa {numeroCasa || "—"}
+        </p>
+        {!editCasa && (
+          <button
+            onClick={() => {
+              setNuevoNum(numeroCasa);
+              setEditCasa(true);
+            }}
+            className="shrink-0 text-xs font-semibold text-brand-600 hover:underline"
+            title="Corregir la casa infractora"
+          >
+            ✎ cambiar casa
+          </button>
+        )}
+      </div>
+      {editCasa && (
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="text-xs text-slate-500">Casa infractora N°</span>
+          <input
+            value={nuevoNum}
+            onChange={(e) => setNuevoNum(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && corregirCasa()}
+            placeholder="N°"
+            autoFocus
+            className="w-20 rounded-lg ring-1 ring-brand-300 px-2 py-1 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+          />
+          <button
+            onClick={corregirCasa}
+            disabled={casaBusy || !nuevoNum.trim()}
+            className="rounded-lg bg-brand-500 text-white text-xs font-bold px-3 py-1 disabled:opacity-40"
+          >
+            {casaBusy ? "…" : "Guardar"}
+          </button>
+          <button
+            onClick={() => {
+              setEditCasa(false);
+              setNuevoNum("");
+            }}
+            className="text-xs text-slate-400"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <p className="text-xs text-slate-500">
         Reporta casa {r.reportante?.numero ?? "—"} · {fecha(r.created_at)}
         {reinc !== null && reinc > 0 ? ` · ${reinc} reincidencia(s)` : ""}

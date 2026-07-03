@@ -664,6 +664,19 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   "🪑 Bienes"). **Gestor "⚙️ Administrar categorías"** colapsable: crear / renombrar (✎) /
   ocultar (⊘) / reactivar (↺). `src/lib/categorias.ts` queda como semilla + COLOR + canon.
 
+## Sesión 2026-07-03 — Incidencias: corregir casa infractora + gráfica mensual de gastos
+- **Gráfica mensual de gastos** (feedback Juan): la tarjeta de Gastos ahora muestra "Promedio
+  por mes" grande + gráfica de barras por mes (últimos 8) en ámbar (sobre promedio) / verde
+  (debajo) + Total discreto. GOTCHA: las barras deben usar **altura en px, no %** — dentro de
+  un flex `items-end` sin altura de referencia definida el `height:%` colapsa a 0 (se veían
+  solo los números, sin barras). Promedio = sobre meses CON movimientos (decisión de Juan).
+- **Migración `042_corregir_infractor.sql`** (aplicada): RPC `corregir_casa_infractora(id,
+  numero)` SECURITY DEFINER — el comité corrige la casa infractora de una incidencia si el
+  vecino la reportó mal. Solo mientras está `pendiente`; valida que la casa exista en la
+  colonia. UI: botón "✎ cambiar casa" en `ResolverItem` (dashboard/incidencias) → input inline
+  → tras guardar recarga placas+reincidencia (dependen del infractor). Verificado E2E con
+  rollback (cambio + guard casa inexistente).
+
 ## Pendientes (siguiente fase, post-deploy)
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
