@@ -531,20 +531,20 @@ export default function GastosPage() {
             </div>
           </div>
 
-          {/* Gráfica de barras por mes */}
+          {/* Gráfica de barras por mes (altura en px = robusta dentro del flex) */}
           {porMes.length > 0 && (
-            <div className="mt-4 flex items-end justify-between gap-1.5 h-28">
+            <div className="mt-4 flex items-end justify-between gap-1.5">
               {porMes.map(([ym, val]) => {
-                const h = maxMes > 0 ? Math.max(6, (val / maxMes) * 100) : 6;
+                const h = maxMes > 0 ? Math.max(8, Math.round((val / maxMes) * 96)) : 8;
                 const sobreProm = val > promedioMes;
                 return (
-                  <div key={ym} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0">
+                  <div key={ym} className="flex-1 flex flex-col items-center gap-1 min-w-0">
                     <span className="text-[9px] text-white/70 tabular-nums">
                       {val >= 1000 ? `${Math.round(val / 1000)}k` : Math.round(val)}
                     </span>
                     <div
-                      className={`w-full rounded-t-md ${sobreProm ? "bg-amber-400" : "bg-emerald-400/80"}`}
-                      style={{ height: `${h}%` }}
+                      className={`w-full rounded-t-md ${sobreProm ? "bg-amber-400" : "bg-emerald-400"}`}
+                      style={{ height: `${h}px` }}
                       title={`${mesLabel(ym)} ${ym.slice(0, 4)}: ${money(val)}`}
                     />
                     <span className="text-[9px] text-white/70">{mesLabel(ym)}</span>
