@@ -79,6 +79,7 @@ export default function IncidenciasPage() {
   const [catId, setCatId] = useState("");
   const [casaNum, setCasaNum] = useState("");
   const [placa, setPlaca] = useState("");
+  const [sinCasa, setSinCasa] = useState(false); // "no sé qué casa es" → solo evidencia
   const [desc, setDesc] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [resuelta, setResuelta] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export default function IncidenciasPage() {
   const [pend, setPend] = useState<Reporte[]>([]);
   const [pendTotal, setPendTotal] = useState(0);
   const [propuestas, setPropuestas] = useState<Reporte[]>([]);
+  const [sinId, setSinId] = useState<Reporte[]>([]); // reportes con evidencia, sin casa
   const [votando, setVotando] = useState<Set<string>>(new Set());
   const [propErr, setPropErr] = useState<string | null>(null);
 
@@ -124,6 +126,16 @@ export default function IncidenciasPage() {
     setPropuestas((data as unknown as Reporte[]) ?? []);
   }, []);
 
+  const cargarSinId = useCallback(async () => {
+    const { data } = await supabaseBrowser
+      .from("incident_reports")
+      .select(REP_COLS)
+      .eq("estado", "sin_identificar")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setSinId((data as unknown as Reporte[]) ?? []);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const {
@@ -152,10 +164,10 @@ export default function IncidenciasPage() {
         .order("nombre");
       setCats((c as unknown as Cat[]) ?? []);
       if (p.house_id) await cargarMios(p.house_id);
-      if (admin) await Promise.all([cargarPend(), cargarPropuestas()]);
+      if (admin) await Promise.all([cargarPend(), cargarPropuestas(), cargarSinId()]);
       setReady(true);
     })();
-  }, [router, cargarMios, cargarPend, cargarPropuestas]);
+  }, [router, cargarMios, cargarPend, cargarPropuestas, cargarSinId]);
 
   async function votar(id: string, aprobar: boolean) {
     if (votando.has(id)) return; // evita doble-tap
@@ -203,12 +215,14 @@ export default function IncidenciasPage() {
     setOk(null);
     setResuelta(null);
     if (!catId) return setErr("Elige el tipo de incidencia.");
-    if (!placa.trim() && !casaNum.trim()) return setErr("Indica la casa infractora (número o placa).");
+    if (!sinCasa && !placa.trim() && !casaNum.trim())
+      return setErr("Indica la casa infractora (número o placa), o marca “No sé qué casa es”.");
+    if (sinCasa && !file) return setErr("Sin casa identificada necesitas adjuntar una foto de evidencia.");
     setEnviando(true);
     try {
-      const infr = await resolverInfractor();
-      if (!infr) throw new Error("No encontré la casa infractora con esos datos.");
-      setResuelta(`Casa ${infr.numero}`);
+      const infr = sinCasa ? null : await resolverInfractor();
+      if (!sinCasa && !infr) throw new Error("No encontré la casa infractora con esos datos.");
+      if (infr) setResuelta(`Casa ${infr.numero}`);
       let url: string | null = null;
       let geo: { lat: number; lng: number } | null = null;
       if (file && coloniaId) {
@@ -219,8 +233,28 @@ export default function IncidenciasPage() {
         if (upErr) throw new Error("No se pudo subir la evidencia.");
         url = supabaseBrowser.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
       }
+
+      // Sin casa identificada: reporte con solo evidencia → bandeja del comité.
+      if (sinCasa) {
+        const { error } = await supabaseBrowser.rpc("reportar_incidencia_sin_casa", {
+          p_categoria: catId,
+          p_descripcion: desc.trim() || null,
+          p_evidencia_url: url,
+          p_lat: geo?.lat ?? null,
+          p_lng: geo?.lng ?? null,
+        });
+        if (error) throw new Error(error.message.replace(/^.*?:\s/, ""));
+        setOk("Reporte con evidencia enviado. El comité identificará la casa y lo revisará.");
+        setCatId("");
+        setSinCasa(false);
+        setDesc("");
+        setFile(null);
+        if (houseId) await cargarMios(houseId);
+        return;
+      }
+
       const { data: repData, error } = await supabaseBrowser.rpc("reportar_incidencia", {
-        p_infractor: infr.id,
+        p_infractor: infr!.id,
         p_categoria: catId,
         p_descripcion: desc.trim() || null,
         p_evidencia_url: url,
@@ -229,7 +263,7 @@ export default function IncidenciasPage() {
       });
       if (error) throw new Error(error.message.replace(/^.*?:\s/, ""));
 
-      let okMsg = `Reporte enviado contra casa ${infr.numero}. El comité lo revisará.`;
+      let okMsg = `Reporte enviado contra casa ${infr!.numero}. El comité lo revisará.`;
       // Si hay placa escrita + foto, verificamos con OCR y auto-procesamos.
       const newId = (repData as { id?: string } | null)?.id;
       if (newId && placa.trim() && url) {
@@ -297,32 +331,49 @@ export default function IncidenciasPage() {
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-500">
-              Casa infractora
-              <input
-                value={casaNum}
-                onChange={(e) => {
-                  setCasaNum(e.target.value);
-                  if (e.target.value) setPlaca("");
-                }}
-                placeholder="N° de casa"
-                className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-              />
-            </label>
-            <label className="text-xs text-slate-500">
-              …o por placa
-              <input
-                value={placa}
-                onChange={(e) => {
-                  setPlaca(e.target.value.toUpperCase());
-                  if (e.target.value) setCasaNum("");
-                }}
-                placeholder="ABC-123"
-                className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
-              />
-            </label>
-          </div>
+          {!sinCasa && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs text-slate-500">
+                Casa infractora
+                <input
+                  value={casaNum}
+                  onChange={(e) => {
+                    setCasaNum(e.target.value);
+                    if (e.target.value) setPlaca("");
+                  }}
+                  placeholder="N° de casa"
+                  className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                …o por placa
+                <input
+                  value={placa}
+                  onChange={(e) => {
+                    setPlaca(e.target.value.toUpperCase());
+                    if (e.target.value) setCasaNum("");
+                  }}
+                  placeholder="ABC-123"
+                  className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 uppercase outline-none focus:ring-2 focus:ring-brand-300"
+                />
+              </label>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2 ring-1 ring-slate-100">
+            <input
+              type="checkbox"
+              checked={sinCasa}
+              onChange={(e) => {
+                setSinCasa(e.target.checked);
+                if (e.target.checked) {
+                  setCasaNum("");
+                  setPlaca("");
+                }
+              }}
+              className="w-4 h-4 accent-brand-500"
+            />
+            🤷 No sé qué casa es — solo tengo la evidencia
+          </label>
           <label className="text-xs text-slate-500">
             Descripción
             <textarea
@@ -363,6 +414,33 @@ export default function IncidenciasPage() {
             {enviando ? "Enviando…" : "Reportar incidencia"}
           </button>
         </section>
+
+        {/* Comité: reportes con evidencia SIN casa identificada */}
+        {isAdmin && sinId.length > 0 && (
+          <section className="mt-7">
+            <h2 className="text-sm font-bold text-slate-700 mb-2">
+              🔎 Por identificar{" "}
+              <span className="text-slate-400 font-medium">({sinId.length})</span>
+            </h2>
+            <p className="text-xs text-slate-500 mb-2">
+              Reportes con evidencia pero sin casa. Revisa la foto e indica de qué casa es para
+              pasarlos al flujo normal.
+            </p>
+            <ul className="flex flex-col gap-2">
+              {sinId.map((r) => (
+                <IdentificarItem
+                  key={r.id}
+                  r={r}
+                  onDone={(id) => {
+                    setSinId((l) => l.filter((x) => x.id !== id));
+                    void cargarPend();
+                    setPendTotal((n) => n + 1);
+                  }}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Comité: propuestas automáticas (OCR) — esperan 1 voto */}
         {isAdmin && propuestas.length > 0 && (
@@ -458,7 +536,8 @@ export default function IncidenciasPage() {
               {mios.map((r) => (
                 <li key={r.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
                   <p className="font-semibold text-slate-800 truncate">
-                    {r.categoria?.nombre ?? "Incidencia"} · Casa {r.infractor?.numero ?? "—"}
+                    {r.categoria?.nombre ?? "Incidencia"} · Casa{" "}
+                    {r.infractor?.numero ?? (r.estado === "sin_identificar" ? "por identificar" : "—")}
                   </p>
                   <p className="text-xs text-slate-500">{fecha(r.created_at)}</p>
                   <span
@@ -467,10 +546,16 @@ export default function IncidenciasPage() {
                         ? "bg-red-50 text-red-600"
                         : r.estado === "pendiente"
                         ? "bg-amber-50 text-amber-700"
+                        : r.estado === "sin_identificar"
+                        ? "bg-sky-50 text-sky-700"
                         : "bg-slate-100 text-slate-500"
                     }`}
                   >
-                    {r.estado === "multa" ? `multa ${money(r.monto_multa)}` : r.estado}
+                    {r.estado === "multa"
+                      ? `multa ${money(r.monto_multa)}`
+                      : r.estado === "sin_identificar"
+                      ? "en identificación"
+                      : r.estado}
                   </span>
                 </li>
               ))}
@@ -479,6 +564,82 @@ export default function IncidenciasPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+// Reporte con evidencia pero sin casa: el comité ve la foto y asigna la casa,
+// lo que lo pasa a 'pendiente' (flujo normal de multar/rechazar).
+function IdentificarItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void }) {
+  const [numero, setNumero] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [itemErr, setItemErr] = useState<string | null>(null);
+
+  async function identificar() {
+    const num = numero.trim();
+    if (!num || busy) return;
+    setBusy(true);
+    setItemErr(null);
+    const res = await callRpc("corregir_casa_infractora", { p_id: r.id, p_numero: num });
+    setBusy(false);
+    if (!res.ok) return setItemErr(res.error);
+    onDone(r.id);
+  }
+
+  return (
+    <li className="bg-white rounded-2xl p-3.5 ring-1 ring-amber-100">
+      <p className="font-semibold text-slate-800">{r.categoria?.nombre ?? "Incidencia"}</p>
+      <p className="text-xs text-slate-500">
+        Reporta casa {r.reportante?.numero ?? "—"} · {fecha(r.created_at)}
+      </p>
+      {r.descripcion && <p className="text-sm text-slate-600 mt-1">{r.descripcion}</p>}
+      {r.evidencia_url && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <a
+            href={r.evidencia_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-brand-600 font-semibold underline"
+          >
+            Ver evidencia
+          </a>
+          {r.evidencia_capturada_at && (
+            <span className="text-[11px] text-slate-500">📸 {fechaHora(r.evidencia_capturada_at)}</span>
+          )}
+          {r.evidencia_lat != null && r.evidencia_lng != null && (
+            <a
+              href={`https://maps.google.com/?q=${r.evidencia_lat},${r.evidencia_lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-brand-600 underline"
+            >
+              📍 ubicación
+            </a>
+          )}
+        </div>
+      )}
+      <div className="mt-2.5 flex items-center gap-2">
+        <span className="text-xs text-slate-500">Casa infractora N°</span>
+        <input
+          value={numero}
+          onChange={(e) => setNumero(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && identificar()}
+          placeholder="N°"
+          className="w-24 rounded-xl ring-1 ring-slate-200 px-2 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+        />
+        <button
+          onClick={identificar}
+          disabled={busy || !numero.trim()}
+          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:opacity-90 disabled:opacity-40"
+        >
+          {busy ? "…" : "Identificar"}
+        </button>
+      </div>
+      {itemErr && (
+        <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200 mt-2">
+          {itemErr}
+        </p>
+      )}
+    </li>
   );
 }
 

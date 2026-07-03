@@ -677,7 +677,17 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   → tras guardar recarga placas+reincidencia (dependen del infractor). Verificado E2E con
   rollback (cambio + guard casa inexistente).
 
-## Pendientes (siguiente fase, post-deploy)
+## Sesión 2026-07-03 (2) — Incidencias con evidencia SIN casa identificada
+- Juan: a veces hay evidencia (foto) pero no se sabe qué casa es. **Migración `043`**
+  (+ enum value `sin_identificar` agregado en llamada aparte antes): `incident_reports
+  .infractor_house_id` ahora NULLABLE; RPC `reportar_incidencia_sin_casa` (exige foto, crea
+  en estado `sin_identificar`, infractor NULL); `corregir_casa_infractora` ahora también
+  identifica los `sin_identificar` → al asignar casa los pasa a `pendiente` (flujo normal).
+- **Frontend**: checkbox "🤷 No sé qué casa es — solo tengo la evidencia" en el reporte
+  (oculta casa/placa, exige foto). Comité: bandeja nueva "🔎 Por identificar" (`IdentificarItem`)
+  con la foto/ubicación + input para asignar casa → pasa a la bandeja de pendientes. "Mis
+  reportes" muestra "por identificar / en identificación" (badge azul). Verificado E2E con
+  rollback (sin foto rechazado, sin_identificar creado, identificado→pendiente).
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
