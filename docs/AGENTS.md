@@ -790,6 +790,20 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   extra por casa, ej. `CAT-128-2` creada, vence 2026-09-02).
 - ⏳ PENDIENTE DE JUAN: (1) ligar su Telegram con su deep-link; (2) **deploy EasyPanel**
   — 4 commits de frontend sin deployar (PROP, FAB SOS, postulación, bandeja vigilantes).
+## Sesión 2026-07-04 — Deploy verificado + usuario de prueba E2E
+- Juan hizo el deploy EasyPanel; verificado que el bundle servido trae el código nuevo
+  (grep de "vecino vigilante"/"tu propiedad" en los chunks de /_next).
+- **Usuario de prueba**: `prueba@vecinity.test` / `Vecinity2026!` — perfil
+  `5432421c-ba8c-4592-9b34-0d3eb096c1f0`, VIVE en casa **999** y es PROPIETARIO de la
+  **998** (rentada) → un solo login recorre residente + dueño externo (chips multi-casa).
+  Casas demo: 999 `eaf8eb18…`, 998 `f0de5859…` (zona de la 128).
+- **E2E por API como el usuario (todo ✓)**: login, saldo, abono $1 (999), abono $2 como
+  dueño (998), pase de visita (página pública 200), reserva Alberca aprobada y cancelada,
+  postulación vigilante, RLS positiva/negativa (casa 128 → vacío), web 200.
+- Deliberadamente quedaron para probar el lado comité: 2 abonos pendientes (rechazar) y
+  1 postulación de vigilante (aprobar). SOS NO se disparó (alertaría Telegram real).
+- [ ] **BORRAR usuario/casas de prueba al terminar** (999, 998, perfil, movimientos) —
+  el cron de cobros les generará cuota el día 1 como a cualquier casa.
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
