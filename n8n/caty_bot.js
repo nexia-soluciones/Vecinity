@@ -118,7 +118,22 @@ const MENU_KB = [
   [{ text: '🏖️ Reservar área', callback_data: 'menu:res' }, { text: '👮 Pase de visita', callback_data: 'menu:vis' }],
   [{ text: '💳 Subir comprobante', callback_data: 'menu:pay' }, { text: '💰 Mi saldo', callback_data: 'menu:saldo' }],
   [{ text: '📖 Reglamento', callback_data: 'menu:reg' }, { text: '🙋 Hablar con el comité', callback_data: 'menu:esc' }],
+  [{ text: '🆘 SOS — pedir ayuda', callback_data: 'menu:sos' }],
 ];
+
+// Dispara el SOS del vecino (tras confirmación) y le da la ruta 911
+async function dispararSosBot(chatId) {
+  const r = await rpcSafe('bot_sos', { p_token: BOT, p_chat: chatId });
+  if (!r.ok) { await send(chatId, '😔 No pude enviar la alerta: ' + r.msg + '\nSi es urgente llama directo al 911.'); return; }
+  const a = r.data || {};
+  await send(chatId,
+    '🚨 *Alerta enviada.* Comité, capitán de zona y vecinos vigilantes ya fueron avisados.\n' +
+    'Te confirmo por aquí cuando alguien vaya en camino.\n\n' +
+    '📞 Si es una emergencia grave, llama al *911* y dicta:\n' +
+    '· ' + ((a.calle ? a.calle + ' ' : '') + (a.casa ? '#' + a.casa : 'tu domicilio')) + '\n' +
+    '· ' + (a.colonia || 'tu colonia'));
+  await setSession(chatId, null, null);
+}
 async function showMenu(chatId, nombre) {
   await setSession(chatId, null, null);
   await send(chatId, '¡Hola' + (nombre ? ', ' + nombre.split(' ')[0] : '') + '! 👋 Soy *Caty*. ¿En qué te ayudo?', MENU_KB);
@@ -159,6 +174,36 @@ async function main() {
     const d = ses.data || {};
 
     if (dataCb === 'menu:cancel' || dataCb === 'menu:menu') { const p = await perfilODisculpa(chatId); if (p) await showMenu(chatId, p.nombre); return; }
+
+    // === SOS ===
+    if (dataCb === 'menu:sos') {
+      const p = await perfilODisculpa(chatId); if (!p) return;
+      await send(chatId, '🆘 ¿Confirmas que necesitas ayuda? Se avisará al comité y a los vigilantes con tu casa.',
+        [[{ text: '🚨 Sí, pedir ayuda', callback_data: 'sos_fire' }, { text: 'Cancelar', callback_data: 'menu:cancel' }]]);
+      return;
+    }
+    if (dataCb === 'sos_fire') {
+      const p = await perfilODisculpa(chatId); if (!p) return;
+      await dispararSosBot(chatId);
+      return;
+    }
+    if (dataCb.indexOf('sos_go:') === 0) {
+      const r = await rpcSafe('bot_sos_atender', { p_token: BOT, p_chat: chatId, p_sos: dataCb.slice(7) });
+      if (!r.ok) { await send(chatId, '😔 ' + r.msg); return; }
+      const a = r.data || {};
+      if (a.ya_atendido) {
+        await send(chatId, '🙌 Gracias — esa alerta ya la tomó *' + (a.atendio || 'otro vecino') + '*.');
+        return;
+      }
+      await send(chatId, '✅ Quedaste como responsable de esta alerta' + (a.casa ? ' (casa ' + a.casa + ')' : '') + '. ¡Gracias! 🏃');
+      if (a.solicitante_chat) {
+        await tg('sendMessage', { chat_id: a.solicitante_chat, text: '🏃 ' + (a.atendio || 'Un vecino') + ' va en camino a apoyarte. Resiste.' });
+      }
+      for (const c of (a.otros_chats || [])) {
+        await tg('sendMessage', { chat_id: c, text: '✅ ' + (a.atendio || 'Un vecino') + ' está atendiendo el SOS' + (a.casa ? ' de la casa ' + a.casa : '') + '.' });
+      }
+      return;
+    }
 
     if (dataCb === 'menu:res') {
       const p = await perfilODisculpa(chatId); if (!p) return;
@@ -388,6 +433,14 @@ async function main() {
   const ses = await getSession(chatId);
   const step = ses.step;
   const d = ses.data || {};
+
+  // "SOS" escrito directo → confirmación exprés (sin pasar por el menú)
+  if (/^(sos|s\.o\.s\.?|911|auxilio)$/i.test(text)) {
+    const p = await perfilODisculpa(chatId); if (!p) return;
+    await send(chatId, '🆘 ¿Confirmas que necesitas ayuda? Se avisará al comité y a los vigilantes con tu casa.',
+      [[{ text: '🚨 Sí, pedir ayuda', callback_data: 'sos_fire' }, { text: 'Cancelar', callback_data: 'menu:cancel' }]]);
+    return;
+  }
 
   // FOTO → comprobante (con o sin flujo iniciado)
   const photos = msg.photo || (msg.document && /image\//.test(msg.document.mime_type || '') ? [msg.document] : null);

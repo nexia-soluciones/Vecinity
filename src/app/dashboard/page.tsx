@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { runOrError } from "@/lib/rpc";
+import { SosModal, useSos } from "./sos";
 
 type Profile = {
   id: string;
@@ -27,33 +28,15 @@ type Pending = { id: string; nombre: string; email: string; created_at: string }
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
-// Tiempo que hay que mantener presionado el SOS para activarlo (evita disparos accidentales)
-const SOS_HOLD_MS = 2500;
-
-// Captura la ubicación del dispositivo; si se niega o no hay GPS, devuelve null (no bloquea la alerta)
-function getCoords(): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-  });
-}
-
 export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [house, setHouse] = useState<House | null>(null);
   const [casasPropias, setCasasPropias] = useState<CasaPropia[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
-  const [sosState, setSosState] = useState<"idle" | "holding" | "sending" | "sent" | "error">(
-    "idle"
-  );
-  const [holdPct, setHoldPct] = useState(0);
-  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const holdStart = useRef(0);
+  const { sosState, holdPct, alerta, startHold, cancelHold, cerrar } = useSos();
+  const [vigEstado, setVigEstado] = useState<string | null>(null);
+  const [vigMsg, setVigMsg] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [tgChecking, setTgChecking] = useState(false);
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
@@ -115,6 +98,15 @@ export default function Dashboard() {
       );
       const esAdmin = p.role === "admin" || p.role === "comite";
       if (esAdmin) await loadPending();
+      // estado de mi postulación como vecino vigilante (solo residentes con casa)
+      if (p.house_id) {
+        const { data: vig } = await supabaseBrowser
+          .from("vigilantes")
+          .select("estado")
+          .eq("profile_id", p.id)
+          .maybeSingle();
+        setVigEstado((vig as { estado: string } | null)?.estado ?? null);
+      }
       // Badge de no leídos: solo para el residente (sus comunicados dirigidos).
       // El comité redacta, no recibe, así que no le mostramos conteo.
       if (!esAdmin && p.house_id) {
@@ -128,30 +120,6 @@ export default function Dashboard() {
       setReady(true);
     })();
   }, [router, loadPending]);
-
-  const dispararSOS = useCallback(async () => {
-    // Sin colonia ligada no se puede enviar: mostrar error en vez de quedar colgado en "holding"
-    if (!profile?.colonia_id) {
-      setSosState("error");
-      return;
-    }
-    setSosState("sending");
-    const coords = await getCoords();
-    const { error } = await supabaseBrowser.from("sos_events").insert({
-      colonia_id: profile.colonia_id,
-      profile_id: profile.id,
-      house_id: profile.house_id,
-      mode: "loud",
-      lat: coords?.lat ?? null,
-      lng: coords?.lng ?? null,
-    });
-    if (error) {
-      setSosState("error");
-      return;
-    }
-    setSosState("sent");
-    setTimeout(() => setSosState("idle"), 6000);
-  }, [profile]);
 
   // Abre Caty en Telegram con el deep-link de vinculación (n8n liga el chat).
   function conectarCaty() {
@@ -172,37 +140,13 @@ export default function Dashboard() {
     setTgChecking(false);
   }
 
-  function clearHold() {
-    if (holdTimer.current) {
-      clearInterval(holdTimer.current);
-      holdTimer.current = null;
-    }
+  async function postularme() {
+    setVigMsg(null);
+    const { error } = await supabaseBrowser.rpc("postular_vigilante");
+    if (error) return setVigMsg(error.message.replace(/^.*?:\s/, ""));
+    setVigEstado("postulado");
+    setVigMsg("¡Gracias! Tu postulación quedó en revisión del comité.");
   }
-
-  function startHold() {
-    if (sosState === "sending" || sosState === "sent") return;
-    setSosState("holding");
-    setHoldPct(0);
-    holdStart.current = Date.now();
-    holdTimer.current = setInterval(() => {
-      const pct = Math.min(100, ((Date.now() - holdStart.current) / SOS_HOLD_MS) * 100);
-      setHoldPct(pct);
-      if (pct >= 100) {
-        clearHold();
-        setHoldPct(0);
-        dispararSOS();
-      }
-    }, 50);
-  }
-
-  function cancelHold() {
-    clearHold();
-    setSosState((s) => (s === "holding" ? "idle" : s));
-    setHoldPct(0);
-  }
-
-  // Limpia el temporizador si el componente se desmonta a medio hold
-  useEffect(() => () => clearHold(), []);
 
   async function resolver(id: string, status: "aprobado" | "rechazado") {
     if (resolviendo.has(id)) return; // evita doble-tap
@@ -425,6 +369,54 @@ export default function Dashboard() {
               : "🆘 Botón de pánico — mantén presionado"}
           </span>
         </button>
+        )}
+
+        {/* Pantalla de emergencia post-SOS (datos para el 911) */}
+        {alerta && <SosModal alerta={alerta} onClose={cerrar} />}
+
+        {/* Vecino vigilante — postulación / estado */}
+        {profile?.house_id && !isAdmin && (
+          <div className="mt-4 w-full rounded-3xl bg-white ring-1 ring-slate-200 p-4 shadow-sm">
+            {vigEstado === "aprobado" ? (
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🛡️</span>
+                <div>
+                  <p className="font-bold text-slate-800">Eres vecino vigilante</p>
+                  <p className="text-xs text-slate-500">
+                    Recibirás las alertas SOS de la colonia por Telegram para acudir a apoyar.
+                  </p>
+                </div>
+              </div>
+            ) : vigEstado === "postulado" ? (
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🛡️</span>
+                <div>
+                  <p className="font-bold text-slate-800">Postulación en revisión</p>
+                  <p className="text-xs text-slate-500">El comité revisará tu solicitud de vecino vigilante.</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">🛡️</span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800">¿Quieres ser vecino vigilante?</p>
+                    <p className="text-xs text-slate-500">
+                      Los vigilantes reciben las alertas SOS de los vecinos y acuden a apoyar
+                      mientras llega ayuda.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={postularme}
+                  className="mt-3 w-full rounded-xl bg-slate-800 text-white text-sm font-semibold py-2.5 hover:bg-slate-700 transition"
+                >
+                  Postularme
+                </button>
+              </>
+            )}
+            {vigMsg && <p className="text-xs text-slate-600 mt-2">{vigMsg}</p>}
+          </div>
         )}
 
         {/* Panel comité — aprobaciones */}

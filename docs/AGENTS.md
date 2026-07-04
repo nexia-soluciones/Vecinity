@@ -740,6 +740,29 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   reglamento cita artículos literales (anti-alucinación).
 - Probado E2E: webhook con chat no ligado → ejecución success (invita a ligar). Falta
   prueba en vivo con chat real de Juan (ligar Telegram y recorrer menú).
+## Sesión 2026-07-03 (5) — SOS v2: vigilantes, zona, acuse y ruta 911
+- **Migración `046_sos_vigilantes.sql`** (aplicada, QA 13/13 rollback):
+  - **BUG FIX**: el capitán de zona NUNCA recibía el SOS — el insert del dashboard no
+    mandaba `zone_id`. Ahora `disparar_sos(lat,lng,mode)` (RPC) resuelve casa Y zona en BD
+    y regresa los datos 911 (calle, número, colonia).
+  - **Vecinos vigilantes**: tabla `vigilantes` (postulado→aprobado/baja), `postular_
+    vigilante()` (self, requiere vivir en casa), `resolver_vigilante(id, aprobar|baja)`
+    (comité). `_sos_destinatarios()` centraliza: comité/admin + capitán de zona +
+    vigilantes aprobados, excluyendo al solicitante.
+  - **Acuse lazo cerrado**: `tg_send_kb` (pg_net + inline keyboard); la alerta lleva botón
+    "🏃 Voy en camino" → `bot_sos_atender` con primero-gana (`WHERE attended_by IS NULL`
+    + ROW_COUNT); Caty avisa al solicitante y al resto. GOTCHA cazado en QA: en el guard
+    de autorización, `p.id = (subquery que da NULL)` → `NOT(false OR NULL)` = NULL y el
+    RAISE no dispara → usar `EXISTS`, nunca `= (subquery)` dentro de un `NOT(...)`.
+  - **Ruta 911**: mensaje de alerta con bloque "datos para el 911"; `sos_events.llamo_911`
+    + `sos_marcar_911()`. NO hay API pública del 911 en MX — se facilita la llamada, no
+    se simula integración.
+- **Frontend**: `dashboard/sos.tsx` (hook `useSos` + `SosModal` 911 + `SosFab`); layout
+  nuevo del dashboard monta el **FAB rojo en TODAS las páginas** (oculto en home, para
+  dueño externo y guardia). Home refactorizado al RPC + modal. Tarjeta "¿Quieres ser
+  vecino vigilante?" (postular/en revisión/activo). Comité: bandeja aprobar/dar de baja.
+- **Caty**: botón 🆘 en menú + escribir "sos/911/auxilio" → confirmación → `bot_sos`
+  (impersonación) → respuesta con ruta 911; callback `sos_go:<id>` = acuse.
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).

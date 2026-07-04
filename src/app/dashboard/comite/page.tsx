@@ -10,6 +10,12 @@ const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
 type Moroso = { numero: string; saldo: number };
+type Vigilante = {
+  id: string;
+  estado: string;
+  postulado_at: string;
+  profile: { nombre: string; house: { numero: string } | null } | null;
+};
 type Convenio = {
   plan_id: string;
   casa: string;
@@ -58,6 +64,9 @@ export default function PanelComite() {
   const [propMsg, setPropMsg] = useState<string | null>(null);
   const [propToken, setPropToken] = useState<string | null>(null);
   const [propBusy, setPropBusy] = useState(false);
+  const [vigilantes, setVigilantes] = useState<Vigilante[]>([]);
+  const [vigMsg, setVigMsg] = useState<string | null>(null);
+  const [vigBusy, setVigBusy] = useState<Set<string>>(new Set());
 
   const cargarFinanzas = useCallback(async () => {
     const [abonos, vehiculos, incidencias, vecinos] = await Promise.all([
@@ -97,6 +106,15 @@ export default function PanelComite() {
     setConvenios((data as unknown as Convenio[]) ?? []);
   }, []);
 
+  const cargarVigilantes = useCallback(async () => {
+    const { data } = await supabaseBrowser
+      .from("vigilantes")
+      .select("id, estado, postulado_at, profile:profiles(nombre, house:houses(numero))")
+      .in("estado", ["postulado", "aprobado"])
+      .order("postulado_at", { ascending: false });
+    setVigilantes((data as unknown as Vigilante[]) ?? []);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const {
@@ -111,7 +129,7 @@ export default function PanelComite() {
       const p = prof as unknown as { role: string; approval_status: string } | null;
       if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
       if (p.role !== "admin" && p.role !== "comite") return router.replace("/dashboard");
-      await Promise.all([cargarFinanzas(), cargarConvenios()]);
+      await Promise.all([cargarFinanzas(), cargarConvenios(), cargarVigilantes()]);
       setReady(true);
     })();
   }, [router, cargarFinanzas, cargarConvenios]);
@@ -168,6 +186,20 @@ export default function PanelComite() {
     } finally {
       setCvBusy(false);
     }
+  }
+
+  async function resolverVigilante(id: string, accion: "aprobar" | "baja") {
+    if (vigBusy.has(id)) return; // evita doble-tap
+    setVigMsg(null);
+    setVigBusy((s) => new Set(s).add(id));
+    const res = await callRpc("resolver_vigilante", { p_id: id, p_accion: accion });
+    setVigBusy((s) => {
+      const n = new Set(s);
+      n.delete(id);
+      return n;
+    });
+    if (!res.ok) return setVigMsg(res.error);
+    await cargarVigilantes();
   }
 
   async function generarCodigoPropietario() {
@@ -512,6 +544,74 @@ export default function PanelComite() {
             )}
             {propMsg && <p className="text-xs text-slate-600">{propMsg}</p>}
           </div>
+        </section>
+
+        {/* Vecinos vigilantes */}
+        <section className="mt-6">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">
+            Vecinos vigilantes{" "}
+            <span className="text-slate-400 font-medium">
+              ({vigilantes.filter((v) => v.estado === "aprobado").length} activos ·{" "}
+              {vigilantes.filter((v) => v.estado === "postulado").length} por revisar)
+            </span>
+          </h2>
+          {vigMsg && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200 mb-2">
+              {vigMsg}
+            </p>
+          )}
+          {vigilantes.length === 0 ? (
+            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+              Nadie se ha postulado todavía. Los vigilantes reciben todos los SOS por Telegram.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {vigilantes.map((v) => (
+                <li
+                  key={v.id}
+                  className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800 truncate">
+                      🛡️ {v.profile?.nombre ?? "—"}
+                      {v.profile?.house?.numero ? ` · Casa ${v.profile.house.numero}` : ""}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {v.estado === "postulado" ? "Postulación pendiente" : "Vigilante activo"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    {v.estado === "postulado" ? (
+                      <>
+                        <button
+                          onClick={() => resolverVigilante(v.id, "aprobar")}
+                          disabled={vigBusy.has(v.id)}
+                          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                        >
+                          {vigBusy.has(v.id) ? "…" : "Aprobar"}
+                        </button>
+                        <button
+                          onClick={() => resolverVigilante(v.id, "baja")}
+                          disabled={vigBusy.has(v.id)}
+                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        >
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => resolverVigilante(v.id, "baja")}
+                        disabled={vigBusy.has(v.id)}
+                        className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        {vigBusy.has(v.id) ? "…" : "Dar de baja"}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Top morosos */}
