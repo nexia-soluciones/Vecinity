@@ -778,6 +778,18 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **Caty**: expansión de sinónimos ANTES de buscar (perro→mascota/animales, carro→
   vehículo, fiesta→ruidosa/evento, etc.) — el vecino no habla en el vocabulario del
   reglamento. Verificado: "¿puedo tener perros?" → Art. 38 + 101 bis + Anexo A.
+## Sesión 2026-07-03 (7) — Cierre: vigilante en Caty, unlink Telegram, CAT-128-2
+- **Caty menú "🛡️ Ser vecino vigilante"** (migr. `048`, wrapper `bot_postular_vigilante`):
+  muestra estado si ya está postulado/aprobado; al postularse avisa al comité por
+  Telegram vía `bot_escalar`. Desplegado con push_caty.sh.
+- **GOTCHA familiar Telegram**: la hija de Juan tocó "Conectar Telegram" desde el
+  perfil de él → su chat quedó ligado al perfil de Juan y `link_telegram` NO
+  sobrescribe (guard `telegram_chat_id IS NULL`). Fix: UPDATE a NULL y re-ligar con
+  el deep-link `t.me/Caty_VCatania_bot?start=vecino_<profileId>` desde el teléfono
+  correcto. Patrón correcto para familias: cada miembro su propia cuenta (invitación
+  extra por casa, ej. `CAT-128-2` creada, vence 2026-09-02).
+- ⏳ PENDIENTE DE JUAN: (1) ligar su Telegram con su deep-link; (2) **deploy EasyPanel**
+  — 4 commits de frontend sin deployar (PROP, FAB SOS, postulación, bandeja vigilantes).
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
