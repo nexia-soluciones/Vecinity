@@ -497,7 +497,23 @@ async function main() {
   }
   if (step === 'reg_duda' && text) {
     const p = await perfilODisculpa(chatId); if (!p) return;
-    const b = await rpcSafe('bot_reglamento_buscar', { p_token: BOT, p_chat: chatId, p_q: text });
+    // Expansión de sinónimos: el vecino dice "perro", el reglamento dice "animales".
+    // Se AGREGAN términos (no se sustituyen) para que el ranking por hits los pese.
+    const SINONIMOS = [
+      [/perr|gat|cachorr/, 'mascota mascotas animales'],
+      [/basur|escombro/, 'basura residuos limpieza aseo'],
+      [/ruido|música|musica|fiesta|escándalo|escandalo/, 'ruidosa molestias evento moral'],
+      [/carro|coche|auto|camioneta|moto/, 'vehículo vehículos estacionar estacionamiento cajón'],
+      [/rent|inquilin|arrend/, 'arrendamiento arrendatario contrato'],
+      [/cuota|mantenimiento|pago|deb|mora/, 'cuotas mantenimiento administración intereses morosos'],
+      [/constru|obra|remodel|amplia/, 'construcción obra diseño fachada'],
+      [/multa|sanci|castigo/, 'multa sanciones tabulador infracción'],
+      [/visita|caseta|acceso|corbat|tag|rfid/, 'acceso caseta vigilancia corbatines registro'],
+    ];
+    let q = text;
+    const lower = text.toLowerCase();
+    for (const [rx, extra] of SINONIMOS) { if (rx.test(lower)) q += ' ' + extra; }
+    const b = await rpcSafe('bot_reglamento_buscar', { p_token: BOT, p_chat: chatId, p_q: q });
     const arts = (b.ok && b.data.articulos) || [];
     if (!arts.length) {
       await send(chatId, 'Eso no lo encontré en el reglamento 🤔. ¿Quieres que le pregunte al comité?',

@@ -763,6 +763,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   vecino vigilante?" (postular/en revisión/activo). Comité: bandeja aprobar/dar de baja.
 - **Caty**: botón 🆘 en menú + escribir "sos/911/auxilio" → confirmación → `bot_sos`
   (impersonación) → respuesta con ruta 911; callback `sos_go:<id>` = acuse.
+## Sesión 2026-07-03 (6) — Reglamento completo verificado + mejor búsqueda
+- PREMISA FALSA detectada: la bitácora decía que la 033b sembró "solo artículos de
+  multas", pero la tabla YA tenía el reglamento completo (113 filas). El trabajo real
+  fue un **diff contra el docx canónico** (Consolidado 2026, vault VillaCatania):
+  4 registros desviados + 1 faltante. Fuente: `Reglamento_Consolidado_Villa_Catania_
+  2026.docx` → `textutil` → parser Python → diff normalizado → upsert quirúrgico.
+- Corregido: **101 bis estaba TRUNCADO** (350→2,121 chars — le faltaba el tabulador
+  completo de multas, lo más preguntable); Anexos A/B traían la bitácora 📌 revuelta
+  dentro del texto (ahora en su campo); agregado **Anexo C** (acuerdos post 22-may-2026).
+  Total: 114 registros.
+- **Migración `047_reglamento_search.sql`**: el fallback ILIKE de `bot_reglamento_buscar`
+  ahora rankea por # de palabras que pegan (antes: 6 filas en orden arbitrario).
+- **Caty**: expansión de sinónimos ANTES de buscar (perro→mascota/animales, carro→
+  vehículo, fiesta→ruidosa/evento, etc.) — el vecino no habla en el vocabulario del
+  reglamento. Verificado: "¿puedo tener perros?" → Art. 38 + 101 bis + Anexo A.
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
