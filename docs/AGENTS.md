@@ -716,6 +716,30 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   house_members ajenos; `my_house_id()` NULL; residente intacto (abono sin arg); PROP
   idempotente. Patrón DO + `set_config(jwt.claims)` + `SET LOCAL ROLE authenticated` +
   RAISE final.
+## Sesión 2026-07-03 (4) — Caty con superpoderes (bot Telegram operativo)
+- Caty pasó de solo ligar el chat a OPERAR: reservas, pases de visita, comprobante por
+  foto, saldo amable, reglamento citado y escalación al comité. **Migración `045_caty_bot
+  .sql`** (aplicada, QA 13/13 rollback):
+  - **Patrón identidad bot**: wrappers `bot_*(p_token, p_chat, …)` SECURITY DEFINER que
+    resuelven perfil por `telegram_chat_id` + IMPERSONAN (`set_config('request.jwt.claims',
+    {sub})` local a la tx) y llaman al RPC real (`crear_reserva`, `registrar_visita`,
+    `registrar_abono`, `set_abono_ocr`) → cero lógica duplicada; umbral de saldo, horarios
+    de área y los 3 candados anti-dup aplican idénticos desde Telegram. Gate doble: token
+    en `bot_config` (chat_ids son semi-adivinables con anon key) + chat ligado.
+  - `bot_sessions` (flujos multi-paso, expiran a 2h), `bot_reglamento_buscar` (FTS spanish
+    + fallback ILIKE, índice GIN), `bot_movimientos` (contexto para Haiku), `bot_escalar`
+    (notifica a comité/admin con Telegram + residentes de `bot_config.casa_escalacion`,
+    default '128', y registra en `notifications`).
+- **n8n**: workflow `QcbjAUiwnW28lXLw`, un Code node (`n8n/caty_bot.js` en el repo con
+  placeholders; **deploy: `scripts/push_caty.sh`** — sustituye secretos de .env.local +
+  token BD, node --check, PUT + deactivate/activate para republicar). Menú inline,
+  callback_query, reservas con disponibilidad por hora (CDMX UTC-6 fijo), visita → link
+  del pase `/visita/<token>`, foto → getFile → bucket (service key, solo server-side) →
+  OCR Claude Haiku (monto+clave rastreo) → confirmar → abono pendiente; saldo con últimos
+  movimientos + dudas libres vía Haiku (JSON {respuesta, escalar}) con auto-escalación;
+  reglamento cita artículos literales (anti-alucinación).
+- Probado E2E: webhook con chat no ligado → ejecución success (invita a ligar). Falta
+  prueba en vivo con chat real de Juan (ligar Telegram y recorrer menú).
 - [ ] **Que comité y guardias liguen su `telegram_chat_id`** — sin esto el SOS por Telegram solo llega a 1 persona (el banner en pantalla del guardia sí jala sin Telegram).
 - [ ] Ligar recibos históricos de `media/comprobantes_transacciones/` (~392) a sus transacciones (falta mapeo del sistema viejo).
 - [ ] Botón "Registrar pago" en Estado de cuenta (admin captura pago de una casa sin depender de inserts manuales).
