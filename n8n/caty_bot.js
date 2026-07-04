@@ -118,7 +118,7 @@ const MENU_KB = [
   [{ text: '🏖️ Reservar área', callback_data: 'menu:res' }, { text: '👮 Pase de visita', callback_data: 'menu:vis' }],
   [{ text: '💳 Subir comprobante', callback_data: 'menu:pay' }, { text: '💰 Mi saldo', callback_data: 'menu:saldo' }],
   [{ text: '📖 Reglamento', callback_data: 'menu:reg' }, { text: '🙋 Hablar con el comité', callback_data: 'menu:esc' }],
-  [{ text: '🆘 SOS — pedir ayuda', callback_data: 'menu:sos' }],
+  [{ text: '🛡️ Ser vecino vigilante', callback_data: 'menu:vig' }, { text: '🆘 SOS — pedir ayuda', callback_data: 'menu:sos' }],
 ];
 
 // Dispara el SOS del vecino (tras confirmación) y le da la ruta 911
@@ -174,6 +174,29 @@ async function main() {
     const d = ses.data || {};
 
     if (dataCb === 'menu:cancel' || dataCb === 'menu:menu') { const p = await perfilODisculpa(chatId); if (p) await showMenu(chatId, p.nombre); return; }
+
+    // === Vecino vigilante ===
+    if (dataCb === 'menu:vig') {
+      const p = await perfilODisculpa(chatId); if (!p) return;
+      const est = await rpcSafe('bot_mi_vigilante', { p_token: BOT, p_chat: chatId });
+      const estado = (est.ok && est.data && est.data.estado) || null;
+      if (estado === 'aprobado') { await send(chatId, '🛡️ Ya eres *vecino vigilante*. Te llegan los SOS de la colonia por aquí — ¡gracias por cuidar a tus vecinos!'); return; }
+      if (estado === 'postulado') { await send(chatId, '🛡️ Tu postulación ya está *en revisión del comité*. Te aviso en cuanto la aprueben.'); return; }
+      await send(chatId,
+        '🛡️ *Programa de vecinos vigilantes*\n\nLos vigilantes reciben las alertas SOS de los vecinos por Telegram y acuden a apoyar mientras llega ayuda. El comité aprueba cada postulación.\n\n¿Quieres participar?',
+        [[{ text: '✅ Sí, postularme', callback_data: 'vig_ok' }, { text: 'Ahora no', callback_data: 'menu:cancel' }]]);
+      return;
+    }
+    if (dataCb === 'vig_ok') {
+      const p = await perfilODisculpa(chatId); if (!p) return;
+      const r = await rpcSafe('bot_postular_vigilante', { p_token: BOT, p_chat: chatId });
+      if (!r.ok) { await send(chatId, '😔 ' + r.msg); return; }
+      await send(chatId, '🙌 ¡Gracias' + (p.nombre ? ', ' + p.nombre.split(' ')[0] : '') + '! Tu postulación quedó registrada y el comité la revisará. Te aviso cuando estés activo.');
+      // avisar al comité que hay postulación nueva
+      const esc = await rpcSafe('bot_escalar', { p_token: BOT, p_chat: chatId, p_tema: 'vecinos vigilantes', p_texto: 'Se postuló al programa de vecinos vigilantes. Apruébalo en el panel del comité.' });
+      if (esc.ok) { for (const c of (esc.data.chats || [])) { await tg('sendMessage', { chat_id: c, text: esc.data.mensaje }); } }
+      return;
+    }
 
     // === SOS ===
     if (dataCb === 'menu:sos') {
