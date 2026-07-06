@@ -16,7 +16,7 @@ type Veh = { id: string; placa: string; brand: { nombre: string } | null };
 type Miembro = { id: string; nombre: string };
 type Solicitud = {
   id: string;
-  tipo: "vehicular" | "peatonal";
+  tipo: "vehicular" | "peatonal" | "visita";
   estado: string;
   es_incluida: boolean;
   costo: number | null;
@@ -25,6 +25,7 @@ type Solicitud = {
   created_at: string;
   vehicle: { placa: string } | null;
   beneficiario: { nombre: string } | null;
+  beneficiario_nombre: string | null;
   house?: { numero: string } | null;
 };
 type Job = {
@@ -47,8 +48,17 @@ const ESTADO: Record<string, { label: string; cls: string }> = {
 };
 
 const SOL_COLS = `id, tipo, estado, es_incluida, costo, costo_estimado, motivo_rechazo, created_at,
+  beneficiario_nombre,
   vehicle:vehicles(placa),
   beneficiario:profiles!card_requests_beneficiario_profile_id_fkey(nombre)`;
+
+const TIPO_EMOJI: Record<string, string> = { vehicular: "🚗", peatonal: "🚶", visita: "🧑‍🤝‍🧑" };
+const titular = (s: Solicitud) =>
+  s.tipo === "vehicular"
+    ? s.vehicle?.placa ?? "Vehículo"
+    : s.tipo === "peatonal"
+      ? s.beneficiario?.nombre ?? "Residente"
+      : s.beneficiario_nombre ?? "Visita";
 
 const mxn = (n: number | null | undefined) =>
   `$${Number(n ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 0 })}`;
@@ -68,6 +78,7 @@ export default function CredencialesPage() {
   const [miembros, setMiembros] = useState<Miembro[]>([]);
   const [vehId, setVehId] = useState("");
   const [benefId, setBenefId] = useState("");
+  const [visitaNombre, setVisitaNombre] = useState("");
   const [mias, setMias] = useState<Solicitud[]>([]);
 
   // Comité
@@ -188,11 +199,12 @@ export default function CredencialesPage() {
     (m) => !mias.some((s) => s.tipo === "peatonal" && s.beneficiario?.nombre === m.nombre && !["rechazada", "cancelada"].includes(s.estado))
   );
 
-  async function solicitar(tipo: "vehicular" | "peatonal") {
+  async function solicitar(tipo: "vehicular" | "peatonal" | "visita") {
     setMsg(null);
     const costo = tipo === "vehicular" && incluidaLibre ? 0 : precio;
-    const destino = tipo === "vehicular" ? vehId : benefId;
-    if (!destino) return setMsg(tipo === "vehicular" ? "Elige el vehículo." : "Elige para quién es.");
+    if (tipo === "vehicular" && !vehId) return setMsg("Elige el vehículo.");
+    if (tipo === "peatonal" && !benefId) return setMsg("Elige para quién es.");
+    if (tipo === "visita" && !visitaNombre.trim()) return setMsg("Escribe el nombre de la visita.");
     const texto =
       costo > 0
         ? `Esta tarjeta es ADICIONAL: se cargarán ${mxn(costo)} al saldo de tu casa al aprobarse. ¿Continuar?`
@@ -203,11 +215,13 @@ export default function CredencialesPage() {
       p_tipo: tipo,
       p_vehicle_id: tipo === "vehicular" ? vehId : null,
       p_beneficiario: tipo === "peatonal" ? benefId : null,
+      p_beneficiario_nombre: tipo === "visita" ? visitaNombre.trim() : null,
     });
     conBusy("solicitar", false);
     if (!res.ok) return setMsg(res.error);
     setVehId("");
     setBenefId("");
+    setVisitaNombre("");
     await recargar();
   }
 
@@ -357,6 +371,33 @@ export default function CredencialesPage() {
                 </button>
               </div>
             </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-sm font-bold text-slate-700">
+                🧑‍🤝‍🧑 Tarjeta para visita frecuente{" "}
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  adicional · {mxn(precio)}
+                </span>
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Para familiares que vienen seguido (hijos, cuidadores). Va a nombre de la persona.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <input
+                  value={visitaNombre}
+                  onChange={(e) => setVisitaNombre(e.target.value)}
+                  placeholder="Nombre completo de la visita"
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                />
+                <button
+                  onClick={() => solicitar("visita")}
+                  disabled={busy.has("solicitar") || !visitaNombre.trim()}
+                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                >
+                  Solicitar
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -375,7 +416,7 @@ export default function CredencialesPage() {
                 <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-800 truncate">
-                      {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa ?? "Vehículo"}` : `🚶 ${s.beneficiario?.nombre ?? "Residente"}`}
+                      {TIPO_EMOJI[s.tipo]} {titular(s)}
                     </p>
                     <p className="text-xs text-slate-500">
                       {s.es_incluida || (s.estado === "solicitada" && s.costo_estimado === 0)
@@ -405,8 +446,7 @@ export default function CredencialesPage() {
               <ul className="flex flex-col gap-1 mt-2">
                 {solCerradas.map((s) => (
                   <li key={s.id} className="text-xs text-slate-500 bg-white rounded-xl px-3 py-2 ring-1 ring-slate-100">
-                    {s.tipo === "vehicular" ? s.vehicle?.placa : s.beneficiario?.nombre} —{" "}
-                    {ESTADO[s.estado]?.label ?? s.estado}
+                    {titular(s)} — {ESTADO[s.estado]?.label ?? s.estado}
                     {s.motivo_rechazo ? ` · ${s.motivo_rechazo}` : ""}
                   </li>
                 ))}
@@ -468,8 +508,8 @@ export default function CredencialesPage() {
                   {pendientes.map((s) => (
                     <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
                       <p className="font-semibold text-slate-800">
-                        {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa}` : `🚶 ${s.beneficiario?.nombre}`}{" "}
-                        · Casa {s.house?.numero}
+                        {TIPO_EMOJI[s.tipo]} {titular(s)} · Casa {s.house?.numero}
+                        {s.tipo === "visita" && <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">visita frecuente</span>}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {s.costo_estimado > 0 ? `Adicional — se cobrará ${mxn(s.costo_estimado)}` : "Incluida — sin costo"}
@@ -541,7 +581,7 @@ export default function CredencialesPage() {
                   {porEntregar.map((s) => (
                     <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-800 truncate">
-                        {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa}` : `🚶 ${s.beneficiario?.nombre}`}
+                        {TIPO_EMOJI[s.tipo]} {titular(s)}
                         {" · Casa "}
                         {s.house?.numero}
                       </p>

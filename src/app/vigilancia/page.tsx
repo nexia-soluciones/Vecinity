@@ -299,12 +299,14 @@ export default function VigilanciaPage() {
   }
 
   // --- Escáner de pase QR ---
-  // Dos tipos de QR: pase de visita (.../visita/<token>) y credencial de
-  // residente impresa por el sistema (.../r/<profile_id>).
+  // Tres tipos de QR: pase de visita (.../visita/<token>), credencial de
+  // residente (.../r/<profile_id>) y tarjeta de visita frecuente (.../vf/<card_id>).
   function extraerToken(text: string): string | null {
     try {
       const u = new URL(text);
       const parts = u.pathname.split("/").filter(Boolean);
+      const vf = parts.indexOf("vf");
+      if (vf >= 0 && parts[vf + 1]) return `vfrecuente:${parts[vf + 1]}`;
       const r = parts.indexOf("r");
       if (r >= 0 && parts[r + 1]) return `residente:${parts[r + 1]}`;
       const i = parts.indexOf("visita");
@@ -333,20 +335,20 @@ export default function VigilanciaPage() {
     if (!token) return setScanMsg("QR no reconocido.");
     await pararScanner();
 
-    // Credencial de residente (tarjeta PVC del módulo Credenciales)
-    if (token.startsWith("residente:")) {
-      const res = await callRpc<{
-        valida: boolean;
-        motivo: string | null;
-        nombre: string | null;
-        casa: string | null;
-        rol: string | null;
-        placas: string[];
-        tarjeta_emitida: boolean;
-      }>("verificar_credencial", { p_profile_id: token.slice("residente:".length) });
+    // Credenciales PVC del módulo Credenciales: residente o visita frecuente
+    if (token.startsWith("residente:") || token.startsWith("vfrecuente:")) {
+      const esResidente = token.startsWith("residente:");
+      const id = token.slice(token.indexOf(":") + 1);
+      const res = esResidente
+        ? await callRpc<typeof scanResidente>("verificar_credencial", { p_profile_id: id })
+        : await callRpc<typeof scanResidente>("verificar_tarjeta_visita", { p_card_id: id });
       if (!res.ok) return setScanMsg(res.error);
       setScanMsg(null);
-      setScanResidente(res.data);
+      const d = res.data as Omit<NonNullable<typeof scanResidente>, "placas" | "tarjeta_emitida"> & {
+        placas?: string[];
+        tarjeta_emitida?: boolean;
+      };
+      setScanResidente({ ...d, placas: d.placas ?? [], tarjeta_emitida: d.tarjeta_emitida ?? true });
       return;
     }
 
@@ -1542,7 +1544,9 @@ export default function VigilanciaPage() {
                   }`}
                 >
                   <p className={`text-2xl font-extrabold ${scanResidente.valida ? "text-emerald-700" : "text-red-600"}`}>
-                    {scanResidente.valida ? "✓ RESIDENTE VÁLIDO" : "✗ NO VÁLIDO"}
+                    {scanResidente.valida
+                      ? `✓ ${scanResidente.rol === "Visita frecuente" ? "VISITA FRECUENTE" : "RESIDENTE"} VÁLIDO`
+                      : "✗ NO VÁLIDO"}
                   </p>
                   {scanResidente.motivo && (
                     <p className="text-sm text-red-600 mt-1">{scanResidente.motivo}</p>

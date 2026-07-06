@@ -861,10 +861,20 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **QA**: 13 pruebas en DO block con rollback (guards, cupo, cargo, doble aprobación,
   stock, permisos, verificador) — todas ✓. E2E real: job insertado → bridge lo tomó solo
   → `impresa` + stock 100→99 → limpiado y restaurado.
+- **Migr. 053 — tarjeta de VISITA FRECUENTE** (hijos/cuidadores de personas mayores que
+  vienen seguido): tipo `visita` en card_type (enum agregado en llamada separada — gotcha),
+  `beneficiario_nombre` text (persona sin cuenta), SIEMPRE con costo (nunca incluida),
+  anti-dup por casa+nombre (UNIQUE parcial case-insensitive). QR propio `/vf/<request_id>`
+  verificable en caseta (`verificar_tarjeta_visita`: válida solo impresa/entregada).
+  Misma plantilla peatonal del bridge con `rotulo='VISITA FRECUENTE'`. GOTCHA aplicado:
+  cambiar firma de `solicitar_tarjeta` = DROP FUNCTION de la vieja antes del CREATE
+  (sobrecarga ambigua en PostgREST). Precio adicional Villa Catania: **$100** (definido por Juan).
+  QA visita: 9 pruebas con rollback ✓ (cotiza 100, sin nombre/duplicado rechazados, cobra
+  100 nunca incluida, payload correcto, en_cola no válida / impresa válida, roles).
 - ⏳ PENDIENTE DE JUAN: (1) deploy EasyPanel de Vecinity; (2) `QUEUE_POLL=true` en el
-  .env del bridge cuando quiera activar la impresión automática; (3) definir el precio
-  de tarjeta adicional en la UI del comité (hoy $0 = aprueba sin cargo); (4) subir la
-  imagen del frente oficial (o dejar FRONT_IMAGE local).
+  .env del bridge cuando quiera activar la impresión automática; (3) subir la
+  imagen del frente oficial (o dejar FRONT_IMAGE local); (4) publicar el comunicado de
+  la campaña de recolección desde la app (texto listo, ver sesión).
 
 ## Sesión 2026-07-04 — Deploy verificado + usuario de prueba E2E
 - Juan hizo el deploy EasyPanel; verificado que el bundle servido trae el código nuevo
