@@ -871,6 +871,9 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   (sobrecarga ambigua en PostgREST). Precio adicional Villa Catania: **$100** (definido por Juan).
   QA visita: 9 pruebas con rollback ✓ (cotiza 100, sin nombre/duplicado rechazados, cobra
   100 nunca incluida, payload correcto, en_cola no válida / impresa válida, roles).
+- **Peatonal = "Próximamente" en la UI** (aún no hay tarjetas físicas de ese tipo): sección
+  deshabilitada en /dashboard/credenciales; el backend (RPCs/plantilla/escáner) queda listo —
+  para habilitarla restaurar el selector de miembros desde git (commit 6cb3912).
 - ⏳ PENDIENTE DE JUAN: (1) deploy EasyPanel de Vecinity; (2) `QUEUE_POLL=true` en el
   .env del bridge cuando quiera activar la impresión automática; (3) subir la
   imagen del frente oficial (o dejar FRONT_IMAGE local); (4) publicar el comunicado de
