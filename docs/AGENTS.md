@@ -874,6 +874,8 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **Peatonal = "Próximamente" en la UI** (aún no hay tarjetas físicas de ese tipo): sección
   deshabilitada en /dashboard/credenciales; el backend (RPCs/plantilla/escáner) queda listo —
   para habilitarla restaurar el selector de miembros desde git (commit 6cb3912).
+- **Panel del comité**: tarjeta 🪪 Credenciales en "Pendientes por revisar" (contador de
+  solicitudes por autorizar → /dashboard/credenciales). Pusheado hasta `75117f6`.
 - ⏳ PENDIENTE DE JUAN: (1) deploy EasyPanel de Vecinity; (2) `QUEUE_POLL=true` en el
   .env del bridge cuando quiera activar la impresión automática; (3) subir la
   imagen del frente oficial (o dejar FRONT_IMAGE local); (4) publicar el comunicado de
