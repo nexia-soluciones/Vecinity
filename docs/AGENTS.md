@@ -838,6 +838,34 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   extra por casa, ej. `CAT-128-2` creada, vence 2026-09-02).
 - ⏳ PENDIENTE DE JUAN: (1) ligar su Telegram con su deep-link; (2) **deploy EasyPanel**
   — 4 commits de frontend sin deployar (PROP, FAB SOS, postulación, bandeja vigilantes).
+## Sesión 2026-07-06 — Módulo Credenciales (tarjetas PVC) + cola de impresión
+- **Migr. 051**: `card_requests` (solicitud→aprobada→en_cola→impresa→entregada) +
+  `print_jobs` (cola que consume nexia-print-bridge) + `colonias.precio_tarjeta_adicional`
+  / `stock_tarjetas` (sembrado 100 VC) / `tarjeta_frente_url`. **Regla de cupo EN BD**:
+  1ª tarjeta VEHICULAR por casa = incluida ($0); todo lo demás (2º carro, peatonales) se
+  cobra al saldo con el patrón multa (transactions cargo + saldo + estatus), idempotente
+  (FOR UPDATE + check de estado). Aprobación bloqueada si stock − en_cola < 1.
+  RPCs: `cotizar_tarjeta`, `solicitar_tarjeta` (anti-dup por vehículo/beneficiario, índice
+  UNIQUE parcial), `cancelar_solicitud_tarjeta`, `resolver_solicitud_tarjeta`,
+  `entregar_tarjeta`, `print_retry_job`; del bridge (SOLO service_role): `print_take_jobs`
+  (SKIP LOCKED) y `print_mark_job` (descuenta stock).
+- **Migr. 052**: `verificar_credencial(profile_id)` — el guardia/comité valida el QR
+  `/r/<profile_id>` de la tarjeta peatonal (nombre, casa, placas, activo).
+- **UI**: `/dashboard/credenciales` (vecino solicita viendo costo ANTES; comité aprueba/
+  rechaza, edita precio y stock inline, cola visible con reintentar, marcar entregada) +
+  acción 🪪 en dashboard. Escáner de vigilancia ahora reconoce credenciales de residente
+  además de pases de visita (ficha verde/roja con placas de la casa).
+- **Bridge (nexia-print-bridge v0.3)**: modo cola `QUEUE_POLL=true` — barrido c/10s de
+  `print_jobs`, imprime en la ZC300 y marca estados. Frente: `colonias.tarjeta_frente_url`
+  o `FRONT_IMAGE` local. QR peatonal se arma en el bridge (`DEFAULT_QR_URL/r/<profileId>`).
+- **QA**: 13 pruebas en DO block con rollback (guards, cupo, cargo, doble aprobación,
+  stock, permisos, verificador) — todas ✓. E2E real: job insertado → bridge lo tomó solo
+  → `impresa` + stock 100→99 → limpiado y restaurado.
+- ⏳ PENDIENTE DE JUAN: (1) deploy EasyPanel de Vecinity; (2) `QUEUE_POLL=true` en el
+  .env del bridge cuando quiera activar la impresión automática; (3) definir el precio
+  de tarjeta adicional en la UI del comité (hoy $0 = aprueba sin cargo); (4) subir la
+  imagen del frente oficial (o dejar FRONT_IMAGE local).
+
 ## Sesión 2026-07-04 — Deploy verificado + usuario de prueba E2E
 - Juan hizo el deploy EasyPanel; verificado que el bundle servido trae el código nuevo
   (grep de "vecino vigilante"/"tu propiedad" en los chunks de /_next).

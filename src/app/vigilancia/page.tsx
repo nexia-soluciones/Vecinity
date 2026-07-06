@@ -117,6 +117,15 @@ export default function VigilanciaPage() {
     estado: string;
     casa: string | null;
   } | null>(null);
+  const [scanResidente, setScanResidente] = useState<{
+    valida: boolean;
+    motivo: string | null;
+    nombre: string | null;
+    casa: string | null;
+    rol: string | null;
+    placas: string[];
+    tarjeta_emitida: boolean;
+  } | null>(null);
   const [scanIne, setScanIne] = useState<File | null>(null);
   const [scanPlaca, setScanPlaca] = useState<File | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
@@ -290,11 +299,14 @@ export default function VigilanciaPage() {
   }
 
   // --- Escáner de pase QR ---
+  // Dos tipos de QR: pase de visita (.../visita/<token>) y credencial de
+  // residente impresa por el sistema (.../r/<profile_id>).
   function extraerToken(text: string): string | null {
-    // El QR codifica la URL .../visita/<token>; aceptar URL completa o token crudo
     try {
       const u = new URL(text);
       const parts = u.pathname.split("/").filter(Boolean);
+      const r = parts.indexOf("r");
+      if (r >= 0 && parts[r + 1]) return `residente:${parts[r + 1]}`;
       const i = parts.indexOf("visita");
       if (i >= 0 && parts[i + 1]) return parts[i + 1];
     } catch {
@@ -320,6 +332,24 @@ export default function VigilanciaPage() {
     const token = extraerToken(text);
     if (!token) return setScanMsg("QR no reconocido.");
     await pararScanner();
+
+    // Credencial de residente (tarjeta PVC del módulo Credenciales)
+    if (token.startsWith("residente:")) {
+      const res = await callRpc<{
+        valida: boolean;
+        motivo: string | null;
+        nombre: string | null;
+        casa: string | null;
+        rol: string | null;
+        placas: string[];
+        tarjeta_emitida: boolean;
+      }>("verificar_credencial", { p_profile_id: token.slice("residente:".length) });
+      if (!res.ok) return setScanMsg(res.error);
+      setScanMsg(null);
+      setScanResidente(res.data);
+      return;
+    }
+
     const { data } = await supabaseBrowser
       .from("visitors")
       .select("id, nombre, estado, house:houses(numero)")
@@ -335,6 +365,7 @@ export default function VigilanciaPage() {
 
   function abrirScan() {
     setScanVisit(null);
+    setScanResidente(null);
     setScanIne(null);
     setScanPlaca(null);
     setScanMsg(null);
@@ -345,6 +376,7 @@ export default function VigilanciaPage() {
     pararScanner();
     setScanOpen(false);
     setScanVisit(null);
+    setScanResidente(null);
     setScanIne(null);
     setScanPlaca(null);
     setScanMsg(null);
@@ -399,7 +431,7 @@ export default function VigilanciaPage() {
 
   // Arranca la cámara cuando el escáner está abierto y aún no hay visita resuelta
   useEffect(() => {
-    if (!scanOpen || scanVisit) return;
+    if (!scanOpen || scanVisit || scanResidente) return;
     let cancelado = false;
     (async () => {
       const { Html5Qrcode } = await import("html5-qrcode");
@@ -417,7 +449,7 @@ export default function VigilanciaPage() {
       pararScanner();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanOpen, scanVisit]);
+  }, [scanOpen, scanVisit, scanResidente]);
 
   const cargarMorosos = useCallback(async () => {
     // Solo casas con adeudo arriba del umbral; las que ya tienen convenio de pago no se restringen.
@@ -1502,11 +1534,46 @@ export default function VigilanciaPage() {
             className="bg-white rounded-2xl p-5 w-full max-w-md flex flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            {!scanVisit ? (
+            {scanResidente ? (
+              <>
+                <div
+                  className={`rounded-2xl p-4 text-center ${
+                    scanResidente.valida ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"
+                  }`}
+                >
+                  <p className={`text-2xl font-extrabold ${scanResidente.valida ? "text-emerald-700" : "text-red-600"}`}>
+                    {scanResidente.valida ? "✓ RESIDENTE VÁLIDO" : "✗ NO VÁLIDO"}
+                  </p>
+                  {scanResidente.motivo && (
+                    <p className="text-sm text-red-600 mt-1">{scanResidente.motivo}</p>
+                  )}
+                </div>
+                {scanResidente.nombre && (
+                  <>
+                    <h3 className="text-xl font-bold text-slate-800">{scanResidente.nombre}</h3>
+                    <p className="text-base text-slate-500">
+                      Casa {scanResidente.casa ?? "—"} · {scanResidente.rol}
+                      {!scanResidente.tarjeta_emitida && " · ⚠️ tarjeta no registrada en el sistema"}
+                    </p>
+                    {scanResidente.placas.length > 0 && (
+                      <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-3 py-2">
+                        Placas de la casa: <b>{scanResidente.placas.join(" · ")}</b>
+                      </p>
+                    )}
+                  </>
+                )}
+                <button
+                  onClick={cerrarScan}
+                  className="rounded-xl bg-slate-100 text-slate-600 text-base font-semibold py-2.5"
+                >
+                  Cerrar
+                </button>
+              </>
+            ) : !scanVisit ? (
               <>
                 <h3 className="text-xl font-bold text-slate-800">Escanear pase QR</h3>
                 <p className="text-base text-slate-500">
-                  Apunta la cámara al código QR del visitante.
+                  Apunta la cámara al QR del visitante o a la credencial del residente.
                 </p>
                 <div id="qr-reader" className="w-full overflow-hidden rounded-xl bg-slate-900" />
                 {scanMsg && <p className="text-base text-red-600">{scanMsg}</p>}

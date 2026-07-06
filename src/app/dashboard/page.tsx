@@ -347,6 +347,7 @@ export default function Dashboard() {
           {!soloPropietario && (
             <>
               <Action emoji="🚗" label="Mis vehículos" onClick={() => router.push("/dashboard/vehiculos")} />
+              <Action emoji="🪪" label="Credenciales de acceso" onClick={() => router.push("/dashboard/credenciales")} />
               <Action emoji="👮" label="Registrar visita" onClick={() => router.push("/dashboard/visitas")} />
               <Action emoji="📣" label="Reportar incidencia" onClick={() => router.push("/dashboard/incidencias")} />
             </>

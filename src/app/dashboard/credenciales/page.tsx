@@ -1,0 +1,565 @@
+"use client";
+
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import { callRpc, runOrError } from "@/lib/rpc";
+
+/**
+ * Credenciales de acceso (tarjetas PVC impresas en la Zebra).
+ * Vecino: solicita tarjetas (1 vehicular incluida por casa; adicionales con costo).
+ * Comité: aprueba (genera cargo + trabajo de impresión), controla inventario y entrega.
+ */
+
+type Veh = { id: string; placa: string; brand: { nombre: string } | null };
+type Miembro = { id: string; nombre: string };
+type Solicitud = {
+  id: string;
+  tipo: "vehicular" | "peatonal";
+  estado: string;
+  es_incluida: boolean;
+  costo: number | null;
+  costo_estimado: number;
+  motivo_rechazo: string | null;
+  created_at: string;
+  vehicle: { placa: string } | null;
+  beneficiario: { nombre: string } | null;
+  house?: { numero: string } | null;
+};
+type Job = {
+  id: string;
+  tipo: string;
+  estado: string;
+  error: string | null;
+  created_at: string;
+  payload: { placa?: string; nombre?: string; casa?: string };
+};
+type Colonia = { stock_tarjetas: number; precio_tarjeta_adicional: number };
+
+const ESTADO: Record<string, { label: string; cls: string }> = {
+  solicitada: { label: "En revisión", cls: "bg-amber-50 text-amber-700" },
+  en_cola: { label: "En impresión", cls: "bg-sky-50 text-sky-700" },
+  impresa: { label: "Lista para recoger", cls: "bg-emerald-50 text-emerald-700" },
+  entregada: { label: "Entregada", cls: "bg-slate-100 text-slate-500" },
+  rechazada: { label: "Rechazada", cls: "bg-red-50 text-red-600" },
+  cancelada: { label: "Cancelada", cls: "bg-slate-100 text-slate-400" },
+};
+
+const SOL_COLS = `id, tipo, estado, es_incluida, costo, costo_estimado, motivo_rechazo, created_at,
+  vehicle:vehicles(placa),
+  beneficiario:profiles!card_requests_beneficiario_profile_id_fkey(nombre)`;
+
+const mxn = (n: number | null | undefined) =>
+  `$${Number(n ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 0 })}`;
+
+export default function CredencialesPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [houseId, setHouseId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+
+  // Vecino
+  const [precio, setPrecio] = useState(0);
+  const [incluidaLibre, setIncluidaLibre] = useState(false);
+  const [vehiculos, setVehiculos] = useState<Veh[]>([]);
+  const [miembros, setMiembros] = useState<Miembro[]>([]);
+  const [vehId, setVehId] = useState("");
+  const [benefId, setBenefId] = useState("");
+  const [mias, setMias] = useState<Solicitud[]>([]);
+
+  // Comité
+  const [colonia, setColonia] = useState<Colonia | null>(null);
+  const [coloniaId, setColoniaId] = useState<string | null>(null);
+  const [pendientes, setPendientes] = useState<Solicitud[]>([]);
+  const [porEntregar, setPorEntregar] = useState<Solicitud[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+
+  const conBusy = (id: string, on: boolean) =>
+    setBusy((s) => {
+      const n = new Set(s);
+      if (on) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+
+  const cargarVecino = useCallback(async (hid: string) => {
+    const [cot, vehs, membs, sols] = await Promise.all([
+      callRpc<{ precio_adicional: number; incluida_disponible: boolean }>("cotizar_tarjeta", {
+        p_tipo: "vehicular",
+      }),
+      supabaseBrowser
+        .from("vehicles")
+        .select("id, placa, brand:vehicle_brands(nombre)")
+        .eq("house_id", hid)
+        .eq("estado", "aprobado")
+        .order("placa"),
+      supabaseBrowser
+        .from("profiles")
+        .select("id, nombre")
+        .eq("house_id", hid)
+        .eq("approval_status", "aprobado")
+        .eq("is_active", true)
+        .order("nombre"),
+      supabaseBrowser
+        .from("card_requests")
+        .select(SOL_COLS)
+        .eq("house_id", hid)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (cot.ok) {
+      setPrecio(Number(cot.data.precio_adicional ?? 0));
+      setIncluidaLibre(!!cot.data.incluida_disponible);
+    }
+    setVehiculos((vehs.data as unknown as Veh[]) ?? []);
+    setMiembros((membs.data as unknown as Miembro[]) ?? []);
+    setMias((sols.data as unknown as Solicitud[]) ?? []);
+  }, []);
+
+  const cargarComite = useCallback(async (cid: string) => {
+    const [col, pend, entr, jbs] = await Promise.all([
+      supabaseBrowser
+        .from("colonias")
+        .select("stock_tarjetas, precio_tarjeta_adicional")
+        .eq("id", cid)
+        .maybeSingle(),
+      supabaseBrowser
+        .from("card_requests")
+        .select(`${SOL_COLS}, house:houses(numero)`)
+        .eq("estado", "solicitada")
+        .order("created_at"),
+      supabaseBrowser
+        .from("card_requests")
+        .select(`${SOL_COLS}, house:houses(numero)`)
+        .eq("estado", "impresa")
+        .order("created_at"),
+      supabaseBrowser
+        .from("print_jobs")
+        .select("id, tipo, estado, error, created_at, payload")
+        .in("estado", ["pendiente", "imprimiendo", "error"])
+        .order("created_at"),
+    ]);
+    setColonia((col.data as unknown as Colonia) ?? null);
+    setPendientes((pend.data as unknown as Solicitud[]) ?? []);
+    setPorEntregar((entr.data as unknown as Solicitud[]) ?? []);
+    setJobs((jbs.data as unknown as Job[]) ?? []);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabaseBrowser.auth.getUser();
+      if (!user) return router.replace("/login");
+      const { data: prof } = await supabaseBrowser
+        .from("profiles")
+        .select("house_id, colonia_id, role, approval_status")
+        .eq("id", user.id)
+        .maybeSingle();
+      const p = prof as unknown as {
+        house_id: string | null;
+        colonia_id: string;
+        role: string;
+        approval_status: string;
+      } | null;
+      if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
+      setHouseId(p.house_id);
+      setColoniaId(p.colonia_id);
+      const admin = p.role === "admin" || p.role === "comite";
+      setIsAdmin(admin);
+      if (p.house_id) await cargarVecino(p.house_id);
+      if (admin) await cargarComite(p.colonia_id);
+      setReady(true);
+    })();
+  }, [router, cargarVecino, cargarComite]);
+
+  const recargar = useCallback(async () => {
+    if (houseId) await cargarVecino(houseId);
+    if (isAdmin && coloniaId) await cargarComite(coloniaId);
+  }, [houseId, isAdmin, coloniaId, cargarVecino, cargarComite]);
+
+  // Vehículos que aún no tienen tarjeta viva
+  const vehSinTarjeta = vehiculos.filter(
+    (v) => !mias.some((s) => s.tipo === "vehicular" && s.vehicle?.placa === v.placa && !["rechazada", "cancelada"].includes(s.estado))
+  );
+  const miembrosSinTarjeta = miembros.filter(
+    (m) => !mias.some((s) => s.tipo === "peatonal" && s.beneficiario?.nombre === m.nombre && !["rechazada", "cancelada"].includes(s.estado))
+  );
+
+  async function solicitar(tipo: "vehicular" | "peatonal") {
+    setMsg(null);
+    const costo = tipo === "vehicular" && incluidaLibre ? 0 : precio;
+    const destino = tipo === "vehicular" ? vehId : benefId;
+    if (!destino) return setMsg(tipo === "vehicular" ? "Elige el vehículo." : "Elige para quién es.");
+    const texto =
+      costo > 0
+        ? `Esta tarjeta es ADICIONAL: se cargarán ${mxn(costo)} al saldo de tu casa al aprobarse. ¿Continuar?`
+        : "Esta tarjeta está incluida para tu casa (sin costo). ¿Solicitar?";
+    if (!confirm(texto)) return;
+    conBusy("solicitar", true);
+    const res = await callRpc("solicitar_tarjeta", {
+      p_tipo: tipo,
+      p_vehicle_id: tipo === "vehicular" ? vehId : null,
+      p_beneficiario: tipo === "peatonal" ? benefId : null,
+    });
+    conBusy("solicitar", false);
+    if (!res.ok) return setMsg(res.error);
+    setVehId("");
+    setBenefId("");
+    await recargar();
+  }
+
+  async function cancelar(id: string) {
+    if (busy.has(id)) return;
+    conBusy(id, true);
+    const res = await callRpc("cancelar_solicitud_tarjeta", { p_id: id });
+    conBusy(id, false);
+    if (!res.ok) return setMsg(res.error);
+    await recargar();
+  }
+
+  async function resolver(s: Solicitud, accion: "aprobar" | "rechazar") {
+    if (busy.has(s.id)) return;
+    setMsg(null);
+    if (accion === "aprobar") {
+      const costoTxt = s.costo_estimado > 0 ? `Se cobrarán ${mxn(s.costo_estimado)} a la casa.` : "Sin costo (tarjeta incluida).";
+      if (!confirm(`¿Aprobar y mandar a impresión? ${costoTxt}`)) return;
+    }
+    conBusy(s.id, true);
+    const res = await callRpc("resolver_solicitud_tarjeta", { p_id: s.id, p_accion: accion });
+    conBusy(s.id, false);
+    if (!res.ok) return setMsg(res.error);
+    await recargar();
+  }
+
+  async function entregar(id: string) {
+    if (busy.has(id)) return;
+    conBusy(id, true);
+    const res = await callRpc("entregar_tarjeta", { p_request_id: id });
+    conBusy(id, false);
+    if (!res.ok) return setMsg(res.error);
+    await recargar();
+  }
+
+  async function reintentar(id: string) {
+    if (busy.has(id)) return;
+    conBusy(id, true);
+    const res = await callRpc("print_retry_job", { p_id: id });
+    conBusy(id, false);
+    if (!res.ok) return setMsg(res.error);
+    await recargar();
+  }
+
+  async function guardarConfig(campo: "precio_tarjeta_adicional" | "stock_tarjetas", valor: number) {
+    if (!coloniaId || Number.isNaN(valor) || valor < 0) return;
+    const res = await runOrError(() =>
+      supabaseBrowser.from("colonias").update({ [campo]: valor }).eq("id", coloniaId)
+    );
+    if (!res.ok) return setMsg(res.error);
+    await recargar();
+  }
+
+  if (!ready)
+    return <main className="flex-1 flex items-center justify-center text-slate-400">Cargando…</main>;
+
+  const solVivas = mias.filter((s) => !["cancelada", "rechazada"].includes(s.estado));
+  const solCerradas = mias.filter((s) => ["cancelada", "rechazada"].includes(s.estado));
+
+  return (
+    <main className="flex-1 bg-gradient-to-b from-brand-50 via-white to-sky-50">
+      <div className="w-full max-w-md mx-auto px-5 py-6 flex flex-col">
+        <div className="flex items-center justify-between">
+          <button onClick={() => router.push("/dashboard")} className="text-sm text-slate-500 hover:text-slate-700">
+            ← Volver
+          </button>
+          <Image src="/brand/vecinity-logo.svg" alt="Vecinity" width={120} height={34} priority />
+        </div>
+
+        <h1 className="text-2xl font-bold text-slate-800 mt-4">Credenciales de acceso</h1>
+        <p className="text-sm text-slate-500">
+          Tu casa tiene <b>1 tarjeta vehicular incluida</b>.{" "}
+          {precio > 0 ? (
+            <>Las adicionales cuestan <b>{mxn(precio)}</b> (se cargan al saldo).</>
+          ) : (
+            <>El comité aún no define el precio de las adicionales.</>
+          )}
+        </p>
+
+        {msg && (
+          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200">{msg}</p>
+        )}
+
+        {/* Solicitar */}
+        {houseId && (
+          <section className="mt-5 bg-white rounded-2xl ring-1 ring-slate-100 p-4 flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-700">
+                🚗 Tarjeta vehicular{" "}
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${incluidaLibre ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {incluidaLibre ? "incluida disponible" : `adicional · ${mxn(precio)}`}
+                </span>
+              </p>
+              <div className="flex gap-2 mt-2">
+                <select
+                  value={vehId}
+                  onChange={(e) => setVehId(e.target.value)}
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-2 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+                >
+                  <option value="">— Elige el vehículo —</option>
+                  {vehSinTarjeta.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.placa}
+                      {v.brand?.nombre ? ` · ${v.brand.nombre}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => solicitar("vehicular")}
+                  disabled={busy.has("solicitar") || !vehId}
+                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                >
+                  Solicitar
+                </button>
+              </div>
+              {vehSinTarjeta.length === 0 && (
+                <p className="text-xs text-slate-400 mt-1">Todos tus vehículos aprobados ya tienen tarjeta o solicitud.</p>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-sm font-bold text-slate-700">
+                🚶 Tarjeta peatonal{" "}
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  adicional · {mxn(precio)}
+                </span>
+              </p>
+              <div className="flex gap-2 mt-2">
+                <select
+                  value={benefId}
+                  onChange={(e) => setBenefId(e.target.value)}
+                  className="flex-1 rounded-xl ring-1 ring-slate-200 px-2 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+                >
+                  <option value="">— ¿Para quién? —</option>
+                  {miembrosSinTarjeta.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => solicitar("peatonal")}
+                  disabled={busy.has("solicitar") || !benefId}
+                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                >
+                  Solicitar
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Mis solicitudes */}
+        <section className="mt-7">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">
+            Tarjetas de mi casa <span className="text-slate-400 font-medium">({solVivas.length})</span>
+          </h2>
+          {solVivas.length === 0 ? (
+            <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+              Aún no hay tarjetas solicitadas.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {solVivas.map((s) => (
+                <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800 truncate">
+                      {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa ?? "Vehículo"}` : `🚶 ${s.beneficiario?.nombre ?? "Residente"}`}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {s.es_incluida || (s.estado === "solicitada" && s.costo_estimado === 0)
+                        ? "Incluida (sin costo)"
+                        : `Adicional · ${mxn(s.costo ?? s.costo_estimado)}`}
+                    </p>
+                    <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO[s.estado]?.cls ?? "bg-slate-100 text-slate-500"}`}>
+                      {ESTADO[s.estado]?.label ?? s.estado}
+                    </span>
+                  </div>
+                  {s.estado === "solicitada" && (
+                    <button
+                      onClick={() => cancelar(s.id)}
+                      disabled={busy.has(s.id)}
+                      className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {solCerradas.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-xs text-slate-400 cursor-pointer">Historial ({solCerradas.length})</summary>
+              <ul className="flex flex-col gap-1 mt-2">
+                {solCerradas.map((s) => (
+                  <li key={s.id} className="text-xs text-slate-500 bg-white rounded-xl px-3 py-2 ring-1 ring-slate-100">
+                    {s.tipo === "vehicular" ? s.vehicle?.placa : s.beneficiario?.nombre} —{" "}
+                    {ESTADO[s.estado]?.label ?? s.estado}
+                    {s.motivo_rechazo ? ` · ${s.motivo_rechazo}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+
+        {/* ═══ Comité ═══ */}
+        {isAdmin && colonia && (
+          <>
+            <section className="mt-8 bg-white rounded-2xl ring-1 ring-slate-100 p-4">
+              <h2 className="text-sm font-bold text-slate-700">Inventario y precio</h2>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <label className="text-xs text-slate-500">
+                  Tarjetas físicas en stock
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={colonia.stock_tarjetas}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (v !== colonia.stock_tarjetas) guardarConfig("stock_tarjetas", v);
+                    }}
+                    className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Precio tarjeta adicional ($)
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={colonia.precio_tarjeta_adicional}
+                    onBlur={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (v !== colonia.precio_tarjeta_adicional) guardarConfig("precio_tarjeta_adicional", v);
+                    }}
+                    className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  />
+                </label>
+              </div>
+              {colonia.precio_tarjeta_adicional === 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2 ring-1 ring-amber-200 mt-2">
+                  ⚠️ Precio en $0: las tarjetas adicionales se aprobarán sin cargo hasta que definas el precio.
+                </p>
+              )}
+            </section>
+
+            <section className="mt-6">
+              <h2 className="text-sm font-bold text-slate-700 mb-2">
+                Solicitudes por aprobar <span className="text-slate-400 font-medium">({pendientes.length})</span>
+              </h2>
+              {pendientes.length === 0 ? (
+                <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+                  No hay solicitudes pendientes 🎉
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {pendientes.map((s) => (
+                    <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                      <p className="font-semibold text-slate-800">
+                        {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa}` : `🚶 ${s.beneficiario?.nombre}`}{" "}
+                        · Casa {s.house?.numero}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {s.costo_estimado > 0 ? `Adicional — se cobrará ${mxn(s.costo_estimado)}` : "Incluida — sin costo"}
+                      </p>
+                      <div className="flex gap-2 mt-2.5">
+                        <button
+                          onClick={() => resolver(s, "aprobar")}
+                          disabled={busy.has(s.id)}
+                          className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                        >
+                          {busy.has(s.id) ? "…" : "Aprobar e imprimir"}
+                        </button>
+                        <button
+                          onClick={() => resolver(s, "rechazar")}
+                          disabled={busy.has(s.id)}
+                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {jobs.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-sm font-bold text-slate-700 mb-2">
+                  Cola de impresión <span className="text-slate-400 font-medium">({jobs.length})</span>
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {jobs.map((j) => (
+                    <li key={j.id} className="bg-white rounded-2xl p-3 ring-1 ring-slate-100 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {j.tipo === "vehicular" ? `🚗 ${j.payload?.placa ?? ""}` : `🚶 ${j.payload?.nombre ?? ""}`}
+                          {j.payload?.casa ? ` · Casa ${j.payload.casa}` : ""}
+                        </p>
+                        <p className={`text-xs ${j.estado === "error" ? "text-red-600" : "text-slate-500"}`}>
+                          {j.estado}
+                          {j.error ? ` — ${j.error}` : ""}
+                        </p>
+                      </div>
+                      {j.estado === "error" && (
+                        <button
+                          onClick={() => reintentar(j.id)}
+                          disabled={busy.has(j.id)}
+                          className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
+                        >
+                          Reintentar
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Las tarjetas se imprimen en la Mac del comité (debe estar encendida con el puente activo).
+                </p>
+              </section>
+            )}
+
+            {porEntregar.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-sm font-bold text-slate-700 mb-2">
+                  Impresas, por entregar <span className="text-slate-400 font-medium">({porEntregar.length})</span>
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {porEntregar.map((s) => (
+                    <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        {s.tipo === "vehicular" ? `🚗 ${s.vehicle?.placa}` : `🚶 ${s.beneficiario?.nombre}`}
+                        {" · Casa "}
+                        {s.house?.numero}
+                      </p>
+                      <button
+                        onClick={() => entregar(s.id)}
+                        disabled={busy.has(s.id)}
+                        className="rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
+                      >
+                        Marcar entregada
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
