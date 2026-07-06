@@ -2,10 +2,37 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-02
+> Última actualización: 2026-07-06
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Reservas + conciliación bancaria de julio (2026-07-06) — parcial ⏳
+
+**Reservas ✅**
+- **Bug corregido**: `entregar_area` no validaba fecha → un guardia cerró reservas FUTURAS por error
+  (210 del 5-jul, 109 del 9 y 10-jul). Guard de fecha en la RPC + `vigilancia/page.tsx` acotado a solo hoy
+  (`[hoy, mañana)`). Reservas corruptas restauradas a `aprobada` (patrón: `fecha_hora_inicio > now()` y
+  estado `en_uso/completada` = imposible → limpiar). **Migración 049**.
+- **Calendario general de reservas** (nuevo): `/dashboard/reservas/calendario` visible a todos los
+  residentes ("lo que está ocupado"). RPC `calendario_reservas(desde,hasta)` aislada por colonia. Botón
+  en el dashboard. **Migración 049**.
+
+**Conciliación bancaria julio ⏳ NO TERMINADA**
+- Archivo `~/Downloads/Julio_2026.xlsx` (todo julio). **GOTCHA**: es un re-export → el saldo corrido
+  cambió → `banco_hash` nuevos → el dedup por hash NO detecta lo ya registrado. Reconciliación correcta
+  por casa + clave de rastreo (no por hash). Script espejo: `scripts/conciliar_julio_2026.mjs`.
+- **Cargos**: los 10 ya estaban importados ($30,361). Nada que hacer.
+- **Abonos**: 41 en el banco → 22 ya registrados, **3 faltantes agregadas** (casas 198/$1500, 107, 180).
+- **Bug corregido**: SheetJS lee "Día" como mojibake "DÃ­a" → se perdía la fecha de los movimientos en
+  `conciliacion/page.tsx`. Fix: variantes mojibake + fallback col 0.
+- **Feature**: badge "✓ ya conciliado en banco · revisa duplicado" en `dashboard/pagos` (Abonos por
+  aprobar) cuando la casa+monto+mes ya tiene abono con `banco_hash` (hoy marca casa 144).
+- **PENDIENTE (falta que Juan defina):**
+  - Confirmar 3 candidatas media-confianza: casas **133** (Keila 133), **230**, **116** ($750 c/u).
+  - Asignar casa a 5 movimientos sin número: depósito efectivo **$1,500**, 2 depósitos efectivo $750
+    (folios PRACTIC), 2 transferencias $750 sin número ("mantenimiento").
+  - Revisar casa **176** (concepto dice "Junio", no julio) y casa **144** (posible duplicado marcado).
 
 ## Comité registra el pago de un vecino (comprobante por WhatsApp) (2026-07-02) ✅
 

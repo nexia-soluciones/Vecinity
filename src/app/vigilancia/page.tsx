@@ -193,6 +193,10 @@ export default function VigilanciaPage() {
   const cargarReservas = useCallback(async () => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+    // Solo reservas de HOY: el guardia entrega/devuelve el día de la reserva.
+    // Las de días futuros se ven en el calendario general, no aquí.
     const { data } = await supabaseBrowser
       .from("reservations")
       .select(
@@ -200,6 +204,7 @@ export default function VigilanciaPage() {
       )
       .in("estado", ["aprobada", "en_uso"])
       .gte("fecha_hora_inicio", hoy.toISOString())
+      .lt("fecha_hora_inicio", manana.toISOString())
       .order("fecha_hora_inicio")
       .limit(40);
     setReservas((data as unknown as Reserva[]) ?? []);

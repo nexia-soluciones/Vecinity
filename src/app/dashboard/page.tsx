@@ -326,6 +326,21 @@ export default function Dashboard() {
         </button>
         )}
 
+        {/* Calendario general de reservas (solo lectura, para ver ocupación) */}
+        {!soloPropietario && (
+        <button
+          onClick={() => router.push("/dashboard/reservas/calendario")}
+          className="mt-3 w-full rounded-3xl bg-white ring-1 ring-sky-200 p-4 flex items-center gap-3 text-left hover:ring-sky-300 transition shadow-sm"
+        >
+          <span className="text-3xl">📅</span>
+          <span>
+            <span className="block font-bold text-slate-800">Calendario de reservas</span>
+            <span className="block text-xs text-slate-500">Mira qué áreas están ocupadas y cuándo</span>
+          </span>
+          <span className="ml-auto text-sky-500 text-xl">›</span>
+        </button>
+        )}
+
         {/* Acciones rápidas */}
         <div className="grid grid-cols-2 gap-3 mt-3">
           <Action emoji="💳" label="Pagar / Subir comprobante" onClick={() => router.push("/dashboard/pagos")} />

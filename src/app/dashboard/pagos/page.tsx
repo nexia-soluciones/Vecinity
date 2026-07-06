@@ -28,6 +28,11 @@ const fecha = (iso: string) =>
 const BUCKET = "vecino-comprobantes";
 const MOV_COLS = "id, tipo, monto, concepto, estado, comprobante_url, created_at";
 
+// Clave casa|monto|añoMes para cruzar un comprobante pendiente contra los abonos
+// que ya se conciliaron con el banco (mismo mes) → detectar posible duplicado.
+const claveConc = (numero: string, monto: number, iso: string) =>
+  `${numero}|${monto}|${iso.slice(0, 7)}`;
+
 export default function PagosPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -46,6 +51,7 @@ export default function PagosPage() {
 
   const [movs, setMovs] = useState<Mov[]>([]);
   const [pend, setPend] = useState<Pend[]>([]);
+  const [conc, setConc] = useState<Set<string>>(new Set()); // casa|monto|añoMes ya en banco
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
 
@@ -77,6 +83,22 @@ export default function PagosPage() {
       .eq("estado", "pendiente")
       .order("created_at");
     setPend((data as unknown as Pend[]) ?? []);
+
+    // Abonos que YA se conciliaron con el banco (banco_hash) → para avisar cuando
+    // un comprobante pendiente ya está cubierto por el banco (posible duplicado).
+    const { data: yaBanco } = await supabaseBrowser
+      .from("transactions")
+      .select("monto, created_at, house:houses(numero)")
+      .eq("tipo", "abono")
+      .not("banco_hash", "is", null);
+    const set = new Set<string>();
+    for (const c of (yaBanco as unknown as {
+      monto: number;
+      created_at: string;
+      house: { numero: string } | null;
+    }[]) ?? [])
+      if (c.house?.numero) set.add(claveConc(c.house.numero, c.monto, c.created_at));
+    setConc(set);
   }, []);
 
   useEffect(() => {
@@ -361,6 +383,14 @@ export default function PagosPage() {
                         <p className="text-xs text-slate-500">
                           {t.concepto} · {fecha(t.created_at)}
                         </p>
+                        {t.house?.numero &&
+                          conc.has(claveConc(t.house.numero, t.monto, t.created_at)) && (
+                            <div className="mt-1">
+                              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200">
+                                ✓ ya conciliado en banco · revisa duplicado
+                              </span>
+                            </div>
+                          )}
                         {t.comprobante_url && (
                           <a
                             href={t.comprobante_url}

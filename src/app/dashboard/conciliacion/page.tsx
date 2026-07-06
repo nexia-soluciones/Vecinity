@@ -200,7 +200,10 @@ export default function ConciliacionPage() {
       const head = (rows[hi] as unknown[]).map((c) => String(c ?? "").toLowerCase());
       const col = (...names: string[]) =>
         head.findIndex((h) => names.some((n) => h.includes(n)));
-      const iFecha = col("día", "dia", "fecha");
+      // "Día" a veces llega con el acento mal codificado ("DÃ­a") y col() no lo
+      // encuentra → la fecha del banco es siempre la primera columna, úsala de respaldo.
+      let iFecha = col("día", "dia", "fecha", "dã­a", "dÃ­a");
+      if (iFecha < 0) iFecha = 0;
       const iConcepto = col("concepto", "referencia");
       const iAbono = col("abono");
       const iCargo = col("cargo");
