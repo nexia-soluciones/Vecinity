@@ -119,6 +119,7 @@ const MENU_KB = [
   [{ text: '💳 Subir comprobante', callback_data: 'menu:pay' }, { text: '💰 Mi saldo', callback_data: 'menu:saldo' }],
   [{ text: '📖 Reglamento', callback_data: 'menu:reg' }, { text: '🙋 Hablar con el comité', callback_data: 'menu:esc' }],
   [{ text: '🛡️ Ser vecino vigilante', callback_data: 'menu:vig' }, { text: '🆘 SOS — pedir ayuda', callback_data: 'menu:sos' }],
+  [{ text: '🔐 Cambiar mi contraseña', callback_data: 'menu:pwd' }],
 ];
 
 // Dispara el SOS del vecino (tras confirmación) y le da la ruta 911
@@ -137,6 +138,34 @@ async function dispararSosBot(chatId) {
 async function showMenu(chatId, nombre) {
   await setSession(chatId, null, null);
   await send(chatId, '¡Hola' + (nombre ? ', ' + nombre.split(' ')[0] : '') + '! 👋 Soy *Caty*. ¿En qué te ayudo?', MENU_KB);
+}
+
+// Genera un enlace de recuperación de contraseña y lo manda por Telegram.
+// Usa el token_hash de GoTrue apuntando a /reset-password → no depende del
+// SITE_URL/allow-list. Solo para el vecino ligado a este chat.
+async function enviarResetBot(chatId) {
+  const r = await rpcSafe('bot_email', { p_token: BOT, p_chat: chatId });
+  if (!r.ok) { await send(chatId, 'Tuve un problema técnico 😅. Intenta de nuevo en un momento.'); return; }
+  const em = r.data || {};
+  if (!em.ok || !em.email) {
+    await send(chatId, 'Tu cuenta no tiene un correo registrado, así que no puedo generarte el enlace. Escríbele al comité para que te ayuden a restablecer la contraseña 🙏');
+    return;
+  }
+  let link = null;
+  try {
+    const gl = await this_http({
+      method: 'POST', url: SB + '/auth/v1/admin/generate_link',
+      headers: { apikey: SRV, Authorization: 'Bearer ' + SRV, 'Content-Type': 'application/json' },
+      body: { type: 'recovery', email: em.email, redirect_to: APP + '/reset-password' },
+      json: true,
+    });
+    if (gl && gl.hashed_token) link = APP + '/reset-password?token_hash=' + gl.hashed_token + '&type=recovery';
+  } catch (e) { link = null; }
+  if (!link) { await send(chatId, 'No pude generar el enlace en este momento 😔. Intenta de nuevo en un rato.'); return; }
+  await send(chatId,
+    '🔐 Restablecer contraseña\n\nToca el enlace para crear una nueva (es de un solo uso y válido por tiempo limitado):\n' +
+    link +
+    '\n\nSi no lo pediste tú, ignora este mensaje: nadie puede cambiar tu contraseña sin abrir este enlace.');
 }
 
 // perfil con manejo de NO_LIGADO
@@ -174,6 +203,13 @@ async function main() {
     const d = ses.data || {};
 
     if (dataCb === 'menu:cancel' || dataCb === 'menu:menu') { const p = await perfilODisculpa(chatId); if (p) await showMenu(chatId, p.nombre); return; }
+
+    // === Cambiar contraseña ===
+    if (dataCb === 'menu:pwd') {
+      const p = await perfilODisculpa(chatId); if (!p) return;
+      await enviarResetBot(chatId);
+      return;
+    }
 
     // === Vecino vigilante ===
     if (dataCb === 'menu:vig') {

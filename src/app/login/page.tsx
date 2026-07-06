@@ -13,10 +13,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState(false);
+  const [reset, setReset] = useState(false);
 
   // ?linked=1 → venía del onboarding PROP con cuenta existente
+  // ?reset=1  → acaba de restablecer su contraseña
   useEffect(() => {
-    setLinked(new URLSearchParams(window.location.search).get("linked") === "1");
+    const q = new URLSearchParams(window.location.search);
+    setLinked(q.get("linked") === "1");
+    setReset(q.get("reset") === "1");
   }, []);
 
   async function entrar() {
@@ -53,6 +57,11 @@ export default function Login() {
               contraseña de siempre.
             </p>
           )}
+          {reset && (
+            <p className="mb-4 text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2 ring-1 ring-emerald-200">
+              Tu contraseña se actualizó. Inicia sesión con la nueva.
+            </p>
+          )}
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -74,7 +83,12 @@ export default function Login() {
           <button onClick={entrar} disabled={loading} className="btn-primary w-full mt-6">
             {loading ? "Entrando…" : "Entrar"}
           </button>
-          <p className="text-center text-sm text-slate-400 mt-5">
+          <p className="text-center text-sm mt-4">
+            <Link href="/recuperar" className="text-brand-600 font-semibold hover:underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
+          <p className="text-center text-sm text-slate-400 mt-3">
             ¿Tienes una invitación?{" "}
             <Link href="/" className="text-brand-600 font-semibold hover:underline">
               Regístrate

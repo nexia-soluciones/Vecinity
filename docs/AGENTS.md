@@ -7,6 +7,27 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Recuperación de contraseña — email + Caty (2026-07-06)
+
+Antes NO existía forma de recuperar contraseña (auth solo `signInWithPassword`, onboarding por código).
+Se agregó reset self-service por **dos canales**:
+
+- **Email**: `/recuperar` (pide correo, mensaje genérico anti-enumeración) → `resetPasswordForEmail`
+  (GoTrue+Zoho) → `/reset-password` (flujo implícito, tokens en el hash) → `updateUser`.
+- **Caty (Telegram)**: botón `🔐 Cambiar mi contraseña` → RPC `bot_email` (migr. **050**) da el correo del
+  vecino ligado → n8n llama `admin/generate_link` (service key) → manda link
+  `/reset-password?token_hash=…` → la página hace `verifyOtp({token_hash,type:recovery})`.
+  Este canal **no depende del SITE_URL** (usa el token_hash directo), ya funciona.
+- `/reset-password` maneja **ambos** casos; browser client con `flowType:'implicit'`; link en `/login`
+  + banner `?reset=1`.
+
+⚠️ **BLOCKER de infra para el canal email** (deuda "Configurar SITE_URL" de NEXIA-OS): el `SITE_URL` de
+GoTrue = dominio de Supabase y `vecinity.nexiasoluciones.com.mx` NO está en el allow-list de redirects
+→ el enlace del correo aterriza en el dominio de Supabase, no en la app. **Pendiente:** agregar los
+dominios de las apps a `ADDITIONAL_REDIRECT_URLS` (→ `GOTRUE_URI_ALLOW_LIST`) en EasyPanel + redeploy del
+servicio Supabase. Verificar con `admin/generate_link` que `redirect_to` ya NO se sobrescribe.
+`tsc --noEmit` ✅ · `node --check` Caty ✅ · `bot_email` probado ✅. Falta: allow-list + `push_caty.sh` + deploy.
+
 ## Reservas + conciliación bancaria de julio (2026-07-06) — parcial ⏳
 
 **Reservas ✅**
