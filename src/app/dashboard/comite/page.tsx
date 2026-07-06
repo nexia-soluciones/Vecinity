@@ -46,7 +46,7 @@ async function countOf(
 export default function PanelComite() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [pend, setPend] = useState({ abonos: 0, vehiculos: 0, incidencias: 0, vecinos: 0 });
+  const [pend, setPend] = useState({ abonos: 0, vehiculos: 0, incidencias: 0, vecinos: 0, credenciales: 0 });
   const [fin, setFin] = useState({ adeudo: 0, favor: 0, morosos: 0, alCorriente: 0 });
   const [topMorosos, setTopMorosos] = useState<Moroso[]>([]);
   const [cobrosMsg, setCobrosMsg] = useState<string | null>(null);
@@ -69,13 +69,14 @@ export default function PanelComite() {
   const [vigBusy, setVigBusy] = useState<Set<string>>(new Set());
 
   const cargarFinanzas = useCallback(async () => {
-    const [abonos, vehiculos, incidencias, vecinos] = await Promise.all([
+    const [abonos, vehiculos, incidencias, vecinos, credenciales] = await Promise.all([
       countOf("transactions", "estado", "pendiente"),
       countOf("vehicles", "estado", "pendiente"),
       countOf("incident_reports", "estado", "pendiente"),
       countOf("profiles", "approval_status", "pendiente"),
+      countOf("card_requests", "estado", "solicitada"),
     ]);
-    setPend({ abonos, vehiculos, incidencias, vecinos });
+    setPend({ abonos, vehiculos, incidencias, vecinos, credenciales });
     const { data: casas } = await supabaseBrowser.from("houses").select("numero, saldo");
     const arr = (casas as unknown as Moroso[]) ?? [];
     let adeudo = 0,
@@ -256,6 +257,7 @@ export default function PanelComite() {
     { label: "Vehículos", n: pend.vehiculos, emoji: "🚗", to: "/dashboard/vehiculos" },
     { label: "Incidencias", n: pend.incidencias, emoji: "📣", to: "/dashboard/incidencias" },
     { label: "Vecinos", n: pend.vecinos, emoji: "👤", to: "/dashboard" },
+    { label: "Credenciales", n: pend.credenciales, emoji: "🪪", to: "/dashboard/credenciales" },
   ];
 
   return (
