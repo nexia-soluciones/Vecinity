@@ -87,8 +87,10 @@ const GENERALES = [
   { key: "jardineria", label: "Jardinería", emoji: "🌿" },
 ];
 const BUCKET_SVC = "vecino-evidencias";
-// Umbral de adeudo para restringir servicios extra a una casa (pesos)
-const SALDO_RESTRINGIDO = 1000;
+// Umbral de adeudo para restringir servicios extra a una casa (pesos).
+// Configurable por villa en colonias.umbral_servicios (panel Áreas). Este es el
+// fallback si la villa aún no lo tiene definido.
+const SALDO_RESTRINGIDO_DEFAULT = 1000;
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
@@ -169,6 +171,8 @@ export default function VigilanciaPage() {
 
   // Morosos / servicios restringidos (casas con saldo > 0)
   const [morosos, setMorosos] = useState<Moroso[]>([]);
+  // Umbral de adeudo (por villa) que restringe servicios extra
+  const [umbralServicios, setUmbralServicios] = useState<number>(SALDO_RESTRINGIDO_DEFAULT);
 
   // Cono asignado a una visita al ingresar (se guarda en localStorage del dispositivo)
   const [conos, setConos] = useState<Record<string, string>>({});
@@ -453,12 +457,12 @@ export default function VigilanciaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanOpen, scanVisit, scanResidente]);
 
-  const cargarMorosos = useCallback(async () => {
+  const cargarMorosos = useCallback(async (umbral: number) => {
     // Solo casas con adeudo arriba del umbral; las que ya tienen convenio de pago no se restringen.
     const { data } = await supabaseBrowser
       .from("houses")
       .select("id, numero, propietario, saldo")
-      .gt("saldo", SALDO_RESTRINGIDO)
+      .gt("saldo", umbral)
       .neq("estatus", "en_convenio")
       .order("saldo", { ascending: false })
       .limit(60);
@@ -561,6 +565,21 @@ export default function VigilanciaPage() {
       if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
       if (!["guardia", "admin", "comite"].includes(p.role)) return router.replace("/dashboard");
       setColoniaId(p.colonia_id);
+
+      // Umbral de servicios restringidos (por villa) — fallback al default si no está.
+      let umbralSvc = SALDO_RESTRINGIDO_DEFAULT;
+      if (p.colonia_id) {
+        const { data: col } = await supabaseBrowser
+          .from("colonias")
+          .select("umbral_servicios")
+          .eq("id", p.colonia_id)
+          .maybeSingle();
+        umbralSvc =
+          (col as unknown as { umbral_servicios: number } | null)?.umbral_servicios ??
+          SALDO_RESTRINGIDO_DEFAULT;
+      }
+      setUmbralServicios(umbralSvc);
+
       await Promise.all([
         cargarTurno(user.id),
         cargarVisitas(),
@@ -569,7 +588,7 @@ export default function VigilanciaPage() {
         cargarGenerales(),
         cargarRecurrentes(),
         cargarHistorial(),
-        cargarMorosos(),
+        cargarMorosos(umbralSvc),
         cargarSos(),
       ]);
       setReady(true);
@@ -1503,7 +1522,7 @@ export default function VigilanciaPage() {
             </h2>
             <div className="bg-red-50 ring-1 ring-red-200 rounded-2xl p-3">
               <p className="text-base text-red-700 mb-2">
-                Casas con adeudo mayor a ${SALDO_RESTRINGIDO.toLocaleString("es-MX")} — no permitir
+                Casas con adeudo mayor a ${umbralServicios.toLocaleString("es-MX")} — no permitir
                 el ingreso de servicios extra (proveedores no esenciales).
               </p>
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
