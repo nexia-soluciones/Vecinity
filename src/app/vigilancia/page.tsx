@@ -458,15 +458,26 @@ export default function VigilanciaPage() {
   }, [scanOpen, scanVisit, scanResidente]);
 
   const cargarMorosos = useCallback(async (umbral: number) => {
-    // Solo casas con adeudo arriba del umbral; las que ya tienen convenio de pago no se restringen.
+    // Un convenio SOLO protege si está FORMALIZADO: un payment_plan activo con sus
+    // términos. Estar marcada "en_convenio" sin plan capturado no basta → la casa
+    // sigue apareciendo como restringida hasta que se registre el convenio.
+    const { data: planes } = await supabaseBrowser
+      .from("payment_plans")
+      .select("house_id")
+      .eq("activo", true);
+    const conConvenio = new Set(
+      ((planes as unknown as { house_id: string }[]) ?? []).map((p) => p.house_id)
+    );
+
+    // Casas con adeudo arriba del umbral.
     const { data } = await supabaseBrowser
       .from("houses")
       .select("id, numero, propietario, saldo")
       .gt("saldo", umbral)
-      .neq("estatus", "en_convenio")
       .order("saldo", { ascending: false })
       .limit(60);
-    setMorosos((data as unknown as Moroso[]) ?? []);
+    const arr = (data as unknown as Moroso[]) ?? [];
+    setMorosos(arr.filter((h) => !conConvenio.has(h.id)));
   }, []);
 
   // Hidratar los conos guardados en este dispositivo (localStorage; efecto para evitar mismatch de SSR)
