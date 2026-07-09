@@ -942,3 +942,46 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **Fix vigilancia (fa4f12f)**: en Recurrentes/Reservas/Historial la casa iba al final de
   una línea con `truncate` y se cortaba ("Limpieza Casa 1…") — ahora "Casa N" va PRIMERO
   (y en negritas en recurrentes); lo que se trunca es el tipo/nombre, nunca la casa.
+
+## Sesión 2026-07-09 — Banco persistente (staging) + cobertura + dedup con contexto + palomita
+- **Problema (Juan)**: "subo el estado de cuenta por conciliación y siento que no se guarda"
+  → correcto: el Excel se parseaba SOLO en el navegador; las filas no conciliadas se
+  perdían al salir. Y no había noción de "hasta qué día está cargado el banco".
+- **Migr. 055 (aplicada en prod)** — todo aditivo:
+  - `bank_uploads` (historial de cortes) + `bank_movs` (staging de TODAS las filas del
+    banco: fecha real como columna, hash UNIQUE, estado pendiente/conciliado/gasto/descartado).
+  - `subir_corte_banco(archivo, filas jsonb)`: persiste el corte idempotente (re-subir el
+    mismo Excel = 0 nuevas); filas cuyo hash ya estaba en transactions/expenses entran
+    ya resueltas. `cobertura_banco()`: última fecha (con fallbacks a datos pre-staging),
+    días de atraso (zona MX) y pendientes. `descartar_mov_banco(hash, nota)`.
+  - **Triggers CON GUARD** en transactions y colonia_expenses (AFTER INSERT/UPDATE OF
+    banco_hash WHEN NOT NULL, SECURITY DEFINER): al ligar banco_hash por CUALQUIER camino
+    (conciliar_abono/auto/confirmar, importar_gasto, aprobar_abono_banco) la fila staged
+    queda marcada sola — presentes y futuros.
+  - **Rebote con contexto**: `set_abono_ocr` (dup por clave de rastreo) devuelve
+    `original_casa`/`original_fecha`; `registrar_abono` (dup por imagen, colonia-wide)
+    lanza "Ese comprobante ya se subió el DD/MM/YYYY por la casa N".
+  - **Palomita positiva**: `abonos_pendientes_comite()` cruza cada pendiente contra
+    `bank_movs` (1º clave de rastreo contenida en el concepto del banco, 2º monto exacto
+    + fecha ±3d de la OCR/registro) y trae `ocr_monto` para comparar contra lo capturado.
+    `aprobar_abono_banco(id, hash)`: aprueba Y liga la fila del banco de un golpe.
+- **UI /dashboard/conciliacion**: guardar-PRIMERO al subir el Excel (💾 corte guardado);
+  tarjeta de cobertura "🏦 Banco cargado hasta el X · ✓ al día / faltan N días — sube un
+  corte más reciente" + tabla de cortes subidos (colapsable); al entrar se retoman los
+  pendientes guardados sin re-subir el Excel; botón "descartar" por fila (traspasos, intereses).
+- **UI /dashboard/pagos**: vecino rebotado ve fecha y casa del comprobante original, y
+  aviso si el monto OCR ≠ capturado; el comité ve por card: ✓ verde "encontrado en el
+  banco (fecha · por rastreo/monto+fecha)", chip monto comprobante (✓ coincide / ⚠️ difiere
+  con ambos valores) y el badge de posible duplicado de siempre. Aprobar con palomita usa
+  `aprobar_abono_banco` (liga el banco); sin palomita, `resolver_transaccion` como antes.
+- **QA en prod con BEGIN/ROLLBACK** (comité 128, vecinos 242/127): corte idempotente ✓,
+  cobertura ✓, dup rastreo con casa/fecha ✓, dup imagen otra casa ✓, palomita por rastreo
+  y por monto+fecha ✓ (OCR 900 vs 888.88 detectado), aprobar ligó banco+saldo+staged ✓,
+  gasto marcó staged ✓, descartar ✓, RLS con `SET LOCAL ROLE authenticated` (vecino 0
+  filas, comité sí) ✓, rollback sin rastro (saldo 242 = 1470 intacto) ✓. Build limpio.
+- **GOTCHA /pg/query multi-statement**: devuelve SOLO el último statement que produce
+  filas → para QA con varias verificaciones, acumular en TEMP TABLE + un único SELECT
+  final ANTES del ROLLBACK (y `GRANT ALL ON temp TO authenticated` si usas SET LOCAL ROLE).
+- **Gotcha fechas date-only en UI**: `new Date('YYYY-MM-DD')` = UTC midnight → en MX se
+  recorre un día atrás; anclar a `T12:00:00` (helpers `fmtDia`/`fechaDia`).
+- ⏳ PENDIENTE DE JUAN: deploy EasyPanel (migración 055 ya aplicada en la BD).

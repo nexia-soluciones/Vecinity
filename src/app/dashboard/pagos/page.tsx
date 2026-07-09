@@ -16,7 +16,17 @@ type Mov = {
   comprobante_url: string | null;
   created_at: string;
 };
-type Pend = Mov & { house: { numero: string } | null };
+// Pendiente por aprobar (RPC abonos_pendientes_comite): incluye la palomita del
+// banco (en_banco + banco_fecha/hash) y el monto leído por OCR del comprobante.
+type Pend = Mov & {
+  casa: string | null;
+  ocr_monto: number | null;
+  ocr_fecha: string | null;
+  en_banco: boolean;
+  banco_hash: string | null;
+  banco_fecha: string | null;
+  match_por: "rastreo" | "monto_fecha" | null;
+};
 // Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
 type CasaFin = { id: string; numero: string; propia: boolean };
 
@@ -24,6 +34,13 @@ const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+// Para fechas-sin-hora del banco (YYYY-MM-DD): anclar a mediodía para que la
+// zona horaria no la recorra un día hacia atrás.
+const fechaDia = (iso: string) =>
+  new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+  });
 
 const BUCKET = "vecino-comprobantes";
 const MOV_COLS = "id, tipo, monto, concepto, estado, comprobante_url, created_at";
@@ -77,11 +94,9 @@ export default function PagosPage() {
   }, []);
 
   const cargarPend = useCallback(async () => {
-    const { data } = await supabaseBrowser
-      .from("transactions")
-      .select(`${MOV_COLS}, house:houses(numero)`)
-      .eq("estado", "pendiente")
-      .order("created_at");
+    // RPC: pendientes + cruce contra las filas del banco guardadas (bank_movs)
+    // + monto OCR del comprobante para comparar contra lo capturado.
+    const { data } = await supabaseBrowser.rpc("abonos_pendientes_comite");
     setPend((data as unknown as Pend[]) ?? []);
 
     // Abonos que YA se conciliaron con el banco (banco_hash) → para avisar cuando
@@ -189,6 +204,8 @@ export default function PagosPage() {
       // banco lo concilie solo y para evitar que el mismo pago se registre 2 veces.
       const nuevoId = (abData as { id?: string } | null)?.id;
       let duplicado = false;
+      let dupDetalle = "";
+      let avisoMonto = "";
       if (nuevoId && url) {
         try {
           const { data: sess } = await supabaseBrowser.auth.getSession();
@@ -202,7 +219,21 @@ export default function PagosPage() {
                 p_ocr: oc.data,
                 p_ref: ref,
               });
-              if ((sr as { duplicado?: boolean } | null)?.duplicado) duplicado = true;
+              const r = sr as {
+                duplicado?: boolean;
+                original_casa?: string;
+                original_fecha?: string;
+              } | null;
+              if (r?.duplicado) {
+                duplicado = true;
+                if (r.original_fecha && r.original_casa)
+                  dupDetalle = ` Ese recibo se subió el ${r.original_fecha} por la casa ${r.original_casa}.`;
+              }
+              // El monto del comprobante no coincide con lo capturado → avisar
+              // (no bloquea: el comité lo verá marcado al aprobar).
+              if (!duplicado && oc.data.monto !== null && Math.abs(oc.data.monto - m) >= 0.01) {
+                avisoMonto = ` Ojo: el comprobante dice ${money(oc.data.monto)} y capturaste ${money(m)} — el comité lo revisará.`;
+              }
             }
           }
         } catch {
@@ -211,10 +242,10 @@ export default function PagosPage() {
       }
       if (duplicado) {
         setErr(
-          "Esta transferencia ya había sido registrada antes (misma clave de rastreo). No se duplicó tu pago."
+          `Esta transferencia ya había sido registrada antes.${dupDetalle} No se duplicó tu pago.`
         );
       } else {
-        setOk("Abono enviado. El comité lo revisará.");
+        setOk(`Abono enviado. El comité lo revisará.${avisoMonto}`);
       }
       setMonto("");
       setFile(null);
@@ -226,13 +257,24 @@ export default function PagosPage() {
     }
   }
 
-  async function resolver(id: string, aprobar: boolean) {
+  async function resolver(t: Pend, aprobar: boolean) {
+    const id = t.id;
     if (resolviendo.has(id)) return; // evita doble-tap
     setPendErr(null);
     setResolviendo((s) => new Set(s).add(id));
-    const res = await callRpc("resolver_transaccion", { p_id: id, p_aprobar: aprobar });
-    if (!res.ok) {
-      setPendErr(res.error);
+    // Si el abono YA apareció en el estado de cuenta (palomita), aprobar también
+    // liga la fila del banco (aprobar_abono_banco) → no se re-ofrece al conciliar.
+    const conBanco = aprobar && t.en_banco && !!t.banco_hash;
+    const res = conBanco
+      ? await callRpc("aprobar_abono_banco", { p_id: id, p_banco_hash: t.banco_hash })
+      : await callRpc("resolver_transaccion", { p_id: id, p_aprobar: aprobar });
+    const dupBanco = res.ok && (res.data as { ok?: boolean; dup?: boolean } | null)?.dup;
+    if (!res.ok || dupBanco) {
+      setPendErr(
+        !res.ok
+          ? res.error
+          : "Esa fila del banco ya se ligó a otro pago — recarga la página y revisa."
+      );
       setResolviendo((s) => {
         const n = new Set(s);
         n.delete(id);
@@ -373,54 +415,75 @@ export default function PagosPage() {
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {pend.map((t) => (
-                  <li key={t.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 truncate">
-                          {money(t.monto)} · Casa {t.house?.numero}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {t.concepto} · {fecha(t.created_at)}
-                        </p>
-                        {t.house?.numero &&
-                          conc.has(claveConc(t.house.numero, t.monto, t.created_at)) && (
-                            <div className="mt-1">
-                              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200">
-                                ✓ ya conciliado en banco · revisa duplicado
+                {pend.map((t) => {
+                  const montoOk = t.ocr_monto !== null && Math.abs(Number(t.ocr_monto) - t.monto) < 0.01;
+                  return (
+                    <li key={t.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">
+                            {money(t.monto)} · Casa {t.casa}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {t.concepto} · {fecha(t.created_at)}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            {/* Palomita: el pago SÍ aparece en el estado de cuenta guardado */}
+                            {t.en_banco && t.banco_fecha && (
+                              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                                ✓ encontrado en el banco ({fechaDia(t.banco_fecha)}
+                                {t.match_por === "rastreo" ? " · por clave de rastreo" : " · por monto y fecha"})
                               </span>
-                            </div>
+                            )}
+                            {/* Monto del comprobante (OCR) vs lo que capturó el vecino */}
+                            {t.ocr_monto !== null &&
+                              (montoOk ? (
+                                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                                  ✓ comprobante {money(Number(t.ocr_monto))}
+                                </span>
+                              ) : (
+                                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
+                                  ⚠️ comprobante dice {money(Number(t.ocr_monto))}, capturó {money(t.monto)}
+                                </span>
+                              ))}
+                            {/* Posible duplicado: ya hay un abono conciliado igual este mes */}
+                            {t.casa && conc.has(claveConc(t.casa, t.monto, t.created_at)) && (
+                              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200">
+                                ⚠️ ya hay uno igual conciliado · revisa duplicado
+                              </span>
+                            )}
+                          </div>
+                          {t.comprobante_url && (
+                            <a
+                              href={t.comprobante_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-brand-600 font-semibold underline"
+                            >
+                              Ver comprobante
+                            </a>
                           )}
-                        {t.comprobante_url && (
-                          <a
-                            href={t.comprobante_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-brand-600 font-semibold underline"
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            onClick={() => resolver(t, true)}
+                            disabled={resolviendo.has(t.id)}
+                            className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                           >
-                            Ver comprobante
-                          </a>
-                        )}
+                            {resolviendo.has(t.id) ? "…" : "Aprobar"}
+                          </button>
+                          <button
+                            onClick={() => resolver(t, false)}
+                            disabled={resolviendo.has(t.id)}
+                            className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                          >
+                            No
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => resolver(t.id, true)}
-                          disabled={resolviendo.has(t.id)}
-                          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
-                        >
-                          {resolviendo.has(t.id) ? "…" : "Aprobar"}
-                        </button>
-                        <button
-                          onClick={() => resolver(t.id, false)}
-                          disabled={resolviendo.has(t.id)}
-                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

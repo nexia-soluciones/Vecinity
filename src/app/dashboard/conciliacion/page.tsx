@@ -49,8 +49,35 @@ type Egreso = {
   errorMsg?: string;
 };
 
+// Cobertura del banco: hasta qué fecha hay movimientos cargados (RPC cobertura_banco)
+type Cobertura = {
+  ultima_fecha: string | null;
+  dias_atraso: number | null;
+  pendientes_abonos: number;
+  pendientes_cargos: number;
+};
+
+// Corte subido (bank_uploads): historial de estados de cuenta guardados
+type Corte = {
+  id: string;
+  archivo: string | null;
+  fecha_min: string | null;
+  fecha_max: string | null;
+  total_filas: number;
+  nuevas: number;
+  created_at: string;
+};
+
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
+
+const fmtDia = (iso: string | null) =>
+  iso
+    ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
+        day: "numeric",
+        month: "short",
+      })
+    : "—";
 
 const normRef = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
 
@@ -120,6 +147,8 @@ export default function ConciliacionPage() {
   const [autoResumen, setAutoResumen] = useState<string | null>(null);
   // Corte: solo procesar movimientos DESDE esta fecha (evita re-contar lo histórico ya migrado).
   const [desde, setDesde] = useState("2026-07-01");
+  const [cob, setCob] = useState<Cobertura | null>(null);
+  const [cortes, setCortes] = useState<Corte[]>([]);
 
   const cargarMapas = useCallback(async () => {
     const { data: hs } = await supabaseBrowser.from("houses").select("id, numero");
@@ -132,11 +161,10 @@ export default function ConciliacionPage() {
     const { data: cm } = await supabaseBrowser
       .from("expense_cat_map")
       .select("keyword, categoria");
-    setCatMap(
-      (((cm as unknown as { keyword: string; categoria: string }[]) ?? []).slice()).sort(
-        (a, b) => b.keyword.length - a.keyword.length
-      )
+    const catList = (((cm as unknown as { keyword: string; categoria: string }[]) ?? []).slice()).sort(
+      (a, b) => b.keyword.length - a.keyword.length
     );
+    setCatMap(catList);
 
     const { data: rm } = await supabaseBrowser.from("bank_ref_map").select("ref_key, house_id");
     const idToNum: Record<string, string> = {};
@@ -145,7 +173,90 @@ export default function ConciliacionPage() {
     for (const r of (rm as unknown as { ref_key: string; house_id: string }[]) ?? [])
       if (idToNum[r.house_id]) map[r.ref_key] = idToNum[r.house_id];
     setRefMap(map);
+    return { casasDict, refMapD: map, catList };
   }, []);
+
+  // Cobertura: hasta qué fecha está cargado el banco + historial de cortes
+  const cargarCobertura = useCallback(async () => {
+    const { data } = await supabaseBrowser.rpc("cobertura_banco");
+    if (data) setCob(data as unknown as Cobertura);
+    const { data: ups } = await supabaseBrowser
+      .from("bank_uploads")
+      .select("id, archivo, fecha_min, fecha_max, total_filas, nuevas, created_at")
+      .order("created_at", { ascending: false })
+      .limit(8);
+    setCortes((ups as unknown as Corte[]) ?? []);
+  }, []);
+
+  // Pendientes persistentes: filas del banco ya guardadas (bank_movs) que quedaron
+  // sin resolver en visitas anteriores → se retoman sin volver a subir el Excel.
+  const cargarStaged = useCallback(
+    async (
+      casasDict: Record<string, string>,
+      refMapD: Record<string, string>,
+      catList: { keyword: string; categoria: string }[]
+    ) => {
+      const { data } = await supabaseBrowser
+        .from("bank_movs")
+        .select("fecha, tipo, monto, concepto, banco_hash")
+        .eq("estado", "pendiente")
+        .order("fecha");
+      const rows =
+        (data as unknown as {
+          fecha: string;
+          tipo: string;
+          monto: number;
+          concepto: string;
+          banco_hash: string;
+        }[]) ?? [];
+      if (rows.length === 0) return;
+      const casasSet = new Set(Object.keys(casasDict));
+      const ins: Ingreso[] = [];
+      const egs: Egreso[] = [];
+      for (const r of rows) {
+        if (r.tipo === "cargo") {
+          const up = r.concepto.toUpperCase();
+          const cat = catList.find((m) => up.includes(m.keyword))?.categoria ?? null;
+          egs.push({
+            key: `s-${r.banco_hash.slice(0, 12)}`,
+            fecha: r.fecha,
+            concepto: r.concepto,
+            monto: Number(r.monto),
+            hash: r.banco_hash,
+            categoria: cat,
+            incluir: true,
+            dup: false,
+            estado: "",
+          });
+        } else {
+          const refKey = normRef(r.concepto);
+          const ext = extraerCasa(r.concepto, casasSet);
+          const sugeridaNum = ext.casa ?? refMapD[refKey] ?? "";
+          ins.push({
+            key: `s-${r.banco_hash.slice(0, 12)}`,
+            fecha: r.fecha,
+            concepto: r.concepto,
+            monto: Number(r.monto),
+            refKey,
+            hash: r.banco_hash,
+            casa: sugeridaNum,
+            sugerida: !!sugeridaNum,
+            conf: ext.conf,
+            incluir: true,
+            dup: false,
+            estado: "",
+          });
+        }
+      }
+      setIngresos(ins);
+      setEgresos(egs);
+      setFileMsg(
+        `Retomando ${rows.length} movimientos pendientes de cortes anteriores ` +
+          `(${ins.length} ingresos · ${egs.length} gastos). No hace falta volver a subir el Excel.`
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     (async () => {
@@ -166,10 +277,14 @@ export default function ConciliacionPage() {
       if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
       if (p.role !== "admin" && p.role !== "comite") return router.replace("/dashboard");
       setColoniaId(p.colonia_id);
-      await cargarMapas();
+      const maps = await cargarMapas();
+      await Promise.all([
+        cargarCobertura(),
+        cargarStaged(maps.casasDict, maps.refMapD, maps.catList),
+      ]);
       setReady(true);
     })();
-  }, [router, cargarMapas]);
+  }, [router, cargarMapas, cargarCobertura, cargarStaged]);
 
   async function onFile(file: File) {
     setFileMsg(null);
@@ -293,13 +408,46 @@ export default function ConciliacionPage() {
       }
       setIngresos(out);
       setEgresos(outEg);
+
+      // 💾 GUARDAR PRIMERO: el corte completo se persiste en bank_movs (idempotente
+      // por hash) — aunque cierres la página, los pendientes se retoman después.
+      let guardado = "";
+      try {
+        const filas = [
+          ...out.map((o) => ({
+            fecha: o.fecha,
+            tipo: "abono",
+            monto: o.monto,
+            concepto: o.concepto,
+            hash: o.hash,
+          })),
+          ...outEg.map((o) => ({
+            fecha: o.fecha,
+            tipo: "cargo",
+            monto: o.monto,
+            concepto: o.concepto,
+            hash: o.hash,
+          })),
+        ];
+        const { data: up, error: upErr } = await supabaseBrowser.rpc("subir_corte_banco", {
+          p_archivo: file.name,
+          p_filas: filas,
+        });
+        if (upErr) throw upErr;
+        const u = up as { nuevas?: number; ya_estaban?: number } | null;
+        guardado = ` · 💾 corte guardado (${u?.nuevas ?? 0} filas nuevas)`;
+        await cargarCobertura();
+      } catch {
+        guardado = " · ⚠️ no se pudo guardar el corte (la conciliación manual sigue funcionando)";
+      }
+
       const nuevos = out.filter((o) => !o.dup).length;
       const conSug = out.filter((o) => o.sugerida && !o.dup).length;
       const egNuevos = outEg.filter((o) => !o.dup).length;
       const corte = saltadasPorFecha > 0 ? ` · ${saltadasPorFecha} anteriores a ${desde} ignorados` : "";
       setFileMsg(
         `${out.length} ingresos (${nuevos} nuevos · ${conSug} con casa sugerida) · ` +
-          `${outEg.length} gastos (${egNuevos} nuevos)${corte}.`
+          `${outEg.length} gastos (${egNuevos} nuevos)${corte}${guardado}.`
       );
     } catch (e) {
       setFileMsg("No pude leer el archivo. ¿Es el Excel del banco?");
@@ -313,6 +461,15 @@ export default function ConciliacionPage() {
 
   function setEgRow(key: string, patch: Partial<Egreso>) {
     setEgresos((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  // Descarta un movimiento del banco que nunca se va a conciliar (traspaso interno,
+  // interés, etc.): sale de pendientes en bank_movs y de la lista.
+  async function descartarMov(hash: string, lado: "ingreso" | "egreso") {
+    await supabaseBrowser.rpc("descartar_mov_banco", { p_banco_hash: hash });
+    if (lado === "ingreso") setIngresos((l) => l.filter((r) => r.hash !== hash));
+    else setEgresos((l) => l.filter((r) => r.hash !== hash));
+    await cargarCobertura();
   }
 
   // Importa los CARGOS seleccionados como gastos de la colonia. Los recurrentes
@@ -358,6 +515,7 @@ export default function ConciliacionPage() {
     setEgresosResumen(
       `Importados: ${auto + bandeja} (${auto} auto-clasificados · ${bandeja} a la bandeja) · ya importados: ${dup} · errores: ${err}.`
     );
+    await cargarCobertura();
   }
 
   // Auto-conciliación: cruza cada fila del banco contra los comprobantes con OCR
@@ -466,6 +624,7 @@ export default function ConciliacionPage() {
         `propuestas por monto+fecha: ${propuestos} · por confirmar a mano: ${pendientes} · ya importados: ${dup}.`
     );
     await cargarMapas();
+    await cargarCobertura();
   }
 
   // Aprueba una propuesta monto+fecha: liga la fila del banco al abono del vecino.
@@ -545,6 +704,7 @@ export default function ConciliacionPage() {
       `Conciliados: ${ok} · ya importados: ${dup} · sin casa válida: ${sinCasa} · errores: ${err}.`
     );
     await cargarMapas();
+    await cargarCobertura();
   }
 
   if (!ready)
@@ -575,6 +735,96 @@ export default function ConciliacionPage() {
           Sube el estado de cuenta del banco (Excel): los abonos se concilian a su casa y los
           cargos entran como gastos de la colonia.
         </p>
+
+        {/* Cobertura: hasta qué día está cargado el banco */}
+        {cob && (() => {
+          const alDia = cob.dias_atraso !== null && cob.dias_atraso <= 1;
+          const pend = cob.pendientes_abonos + cob.pendientes_cargos;
+          return (
+            <section
+              className={`mt-4 rounded-2xl p-4 ring-1 ${
+                cob.ultima_fecha === null
+                  ? "bg-slate-50 ring-slate-200"
+                  : alDia
+                  ? "bg-emerald-50 ring-emerald-200"
+                  : "bg-amber-50 ring-amber-200"
+              }`}
+            >
+              {cob.ultima_fecha === null ? (
+                <p className="text-sm font-semibold text-slate-600">
+                  🏦 Aún no hay movimientos del banco cargados. Sube tu primer corte abajo.
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">
+                      🏦 Banco cargado hasta el{" "}
+                      <span className="font-extrabold">{fmtDia(cob.ultima_fecha)}</span>
+                    </p>
+                    {alDia ? (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2.5 py-1">
+                        ✓ al día
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-800 bg-amber-100 rounded-full px-2.5 py-1">
+                        faltan {cob.dias_atraso} días
+                      </span>
+                    )}
+                  </div>
+                  {!alDia && (
+                    <p className="text-xs text-amber-800 mt-1">
+                      ⬆️ Sube un corte más reciente para ponerte al día.
+                    </p>
+                  )}
+                  {pend > 0 && (
+                    <p className="text-xs text-slate-600 mt-1">
+                      {pend} movimientos guardados sin resolver ({cob.pendientes_abonos} ingresos ·{" "}
+                      {cob.pendientes_cargos} gastos) — están en la lista de abajo.
+                    </p>
+                  )}
+                </>
+              )}
+              {cortes.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-xs font-semibold text-slate-500 cursor-pointer select-none">
+                    Cortes subidos ({cortes.length})
+                  </summary>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-[11px] text-slate-600">
+                      <thead>
+                        <tr className="text-left text-slate-400">
+                          <th className="pr-2 pb-1 font-semibold">Subido</th>
+                          <th className="pr-2 pb-1 font-semibold">Cubre</th>
+                          <th className="pr-2 pb-1 font-semibold text-right">Filas</th>
+                          <th className="pb-1 font-semibold text-right">Nuevas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cortes.map((c) => (
+                          <tr key={c.id} className="border-t border-slate-200/60">
+                            <td className="pr-2 py-1">
+                              {fmtDia(c.created_at)}
+                              {c.archivo && (
+                                <span className="block text-slate-400 truncate max-w-[120px]" title={c.archivo}>
+                                  {c.archivo}
+                                </span>
+                              )}
+                            </td>
+                            <td className="pr-2 py-1 whitespace-nowrap">
+                              {fmtDia(c.fecha_min)} – {fmtDia(c.fecha_max)}
+                            </td>
+                            <td className="pr-2 py-1 text-right">{c.total_filas}</td>
+                            <td className="py-1 text-right font-semibold">{c.nuevas}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </section>
+          );
+        })()}
 
         {/* Subir archivo */}
         <section className="mt-4 bg-white rounded-2xl ring-1 ring-slate-100 p-4">
@@ -703,6 +953,15 @@ export default function ConciliacionPage() {
                           )}
                           {r.estado === "error" && (
                             <span className="text-[10px] font-semibold text-red-600">{r.errorMsg}</span>
+                          )}
+                          {(r.estado === "" || r.estado === "error") && (
+                            <button
+                              onClick={() => descartarMov(r.hash, "ingreso")}
+                              className="ml-auto text-[10px] text-slate-400 underline hover:text-slate-600"
+                              title="No es un pago de vecino (traspaso, interés…) — sácalo de pendientes"
+                            >
+                              descartar
+                            </button>
                           )}
                         </div>
 
@@ -865,6 +1124,15 @@ export default function ConciliacionPage() {
                           )}
                           {r.estado === "error" && (
                             <span className="text-[10px] font-semibold text-red-600">{r.errorMsg}</span>
+                          )}
+                          {(r.estado === "" || r.estado === "error") && (
+                            <button
+                              onClick={() => descartarMov(r.hash, "egreso")}
+                              className="ml-auto text-[10px] text-slate-400 underline hover:text-slate-600"
+                              title="No es un gasto real de la colonia — sácalo de pendientes"
+                            >
+                              descartar
+                            </button>
                           )}
                         </div>
                       </div>
