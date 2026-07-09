@@ -71,6 +71,9 @@ export default function PagosPage() {
   const [conc, setConc] = useState<Set<string>>(new Set()); // casa|monto|añoMes ya en banco
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
+  // Corrección de monto antes de aprobar (vecino capturó mal, ej. 750 vs 450)
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState("");
 
   const cargarSaldo = useCallback(async (hid: string) => {
     const { data } = await supabaseBrowser
@@ -295,6 +298,19 @@ export default function PagosPage() {
     if (isAdmin) await cargarPend();
   }
 
+  // Corrige el monto de un abono pendiente (queda auditado en el concepto) y
+  // recarga la lista: si ahora cuadra con el banco, aparece la palomita.
+  async function corregirMonto(t: Pend) {
+    const v = parseFloat(editVal);
+    if (!v || v <= 0) return setPendErr("Escribe un monto válido.");
+    setPendErr(null);
+    const res = await callRpc("corregir_monto_abono", { p_id: t.id, p_nuevo_monto: v });
+    if (!res.ok) return setPendErr(res.error);
+    setEditId(null);
+    setEditVal("");
+    await cargarPend();
+  }
+
   if (!ready)
     return (
       <main className="flex-1 flex items-center justify-center text-slate-400">Cargando…</main>
@@ -453,15 +469,55 @@ export default function PagosPage() {
                               </span>
                             )}
                           </div>
-                          {t.comprobante_url && (
-                            <a
-                              href={t.comprobante_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-brand-600 font-semibold underline"
-                            >
-                              Ver comprobante
-                            </a>
+                          <div className="mt-1 flex items-center gap-3">
+                            {t.comprobante_url && (
+                              <a
+                                href={t.comprobante_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-brand-600 font-semibold underline"
+                              >
+                                Ver comprobante
+                              </a>
+                            )}
+                            {editId !== t.id && (
+                              <button
+                                onClick={() => {
+                                  setEditId(t.id);
+                                  // pre-llenar con el monto del comprobante si difiere
+                                  setEditVal(String(!montoOk && t.ocr_monto !== null ? t.ocr_monto : t.monto));
+                                }}
+                                className="text-xs text-slate-500 font-semibold underline hover:text-slate-700"
+                              >
+                                ✏️ Corregir monto
+                              </button>
+                            )}
+                          </div>
+                          {editId === t.id && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={editVal}
+                                onChange={(e) => setEditVal(e.target.value)}
+                                className="w-24 rounded-lg ring-1 ring-slate-200 px-2 py-1.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                              />
+                              <button
+                                onClick={() => corregirMonto(t)}
+                                className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditId(null);
+                                  setEditVal("");
+                                }}
+                                className="rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1.5 hover:bg-slate-200"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
                           )}
                         </div>
                         <div className="flex gap-2 shrink-0">

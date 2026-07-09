@@ -985,3 +985,10 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **Gotcha fechas date-only en UI**: `new Date('YYYY-MM-DD')` = UTC midnight → en MX se
   recorre un día atrás; anclar a `T12:00:00` (helpers `fmtDia`/`fechaDia`).
 - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (migración 055 ya aplicada en la BD).
+- **Migr. 056 — corregir monto antes de aprobar** (caso casa 222: capturó $750, el
+  comprobante decía $450): RPC `corregir_monto_abono(id, nuevo_monto, nota?)` — solo
+  comité, SOLO abonos `pendiente` (aún no tocan saldo; resolver aplicará el corregido),
+  auditoría en el concepto ("monto corregido de $750 a $450 por el comité"). UI: botón
+  "✏️ Corregir monto" en cada card de por-aprobar, pre-llenado con el monto OCR cuando
+  difiere; al guardar recarga la lista y si ya cuadra con el banco sale la palomita.
+  QA con rollback: corrige+audita ✓, sin_cambio ✓, monto 0 ✗, aprobado ✗, no-admin ✗.
