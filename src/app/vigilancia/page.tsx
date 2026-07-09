@@ -1219,7 +1219,7 @@ export default function VigilanciaPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-lg font-semibold text-slate-800 truncate">
-                      {r.area?.icono} {r.area?.nombre} · Casa {r.house?.numero ?? "—"}
+                      Casa {r.house?.numero ?? "—"} · {r.area?.icono} {r.area?.nombre}
                     </p>
                     <p className="text-base text-slate-500">
                       {hora(r.fecha_hora_inicio)}–{hora(r.fecha_hora_fin)}
@@ -1364,7 +1364,11 @@ export default function VigilanciaPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-lg font-semibold text-slate-800 truncate">{pr.nombre}</p>
                       <p className="text-base text-slate-500 truncate">
-                        {pr.tipo} · Casa {pr.house?.numero ?? "—"}
+                        <span className="font-bold text-slate-700">
+                          Casa {pr.house?.numero ?? "—"}
+                        </span>
+                        {" · "}
+                        {pr.tipo}
                         {dentro ? " · ● dentro" : ""}
                       </p>
                     </div>
@@ -1477,7 +1481,7 @@ export default function VigilanciaPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-lg font-semibold text-slate-800 truncate">
-                      {h.nombre} · Casa {h.house?.numero ?? "—"}
+                      Casa {h.house?.numero ?? "—"} · {h.nombre}
                     </p>
                     <p className="text-base text-slate-500">
                       {h.fecha_hora_entrada ? `Entró ${hora(h.fecha_hora_entrada)}` : "—"}
