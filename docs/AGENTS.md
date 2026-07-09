@@ -992,3 +992,13 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   "✏️ Corregir monto" en cada card de por-aprobar, pre-llenado con el monto OCR cuando
   difiere; al guardar recarga la lista y si ya cuadra con el banco sale la palomita.
   QA con rollback: corrige+audita ✓, sin_cambio ✓, monto 0 ✗, aprobado ✗, no-admin ✗.
+- **Migr. 057 — palomita solo con match SEGURO** (observación Juan: muchas casas pagan
+  el mismo monto el mismo día → monto+fecha podía ligar la fila de OTRA casa):
+  `abonos_pendientes_comite()` ahora clasifica el match: `rastreo` (clave única) /
+  `casa` (el concepto del banco menciona C###/CASA### de ESA casa) / `monto_fecha`
+  (solo si el cruce es 1 a 1: único abono ↔ única fila) / `monto_fecha_ambiguo`
+  (varios candidatos → badge ámbar "hay N pagos con este monto" y Aprobar NO liga la
+  fila del banco, se aprueba normal y se concilia en /conciliacion). Si el banco
+  menciona OTRA casa válida, el candidato se descarta. QA con rollback: los $750
+  reales dieron 18 candidatos → ámbar ✓; $333.33 único → verde 1:1 ✓; "CASA 242" en
+  concepto → verde por casa ✓; "C127" con abono de la 242 → sin palomita ✓.

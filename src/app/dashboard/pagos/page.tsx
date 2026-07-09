@@ -25,7 +25,10 @@ type Pend = Mov & {
   en_banco: boolean;
   banco_hash: string | null;
   banco_fecha: string | null;
-  match_por: "rastreo" | "monto_fecha" | null;
+  // rastreo/casa/monto_fecha = match SEGURO (liga al aprobar);
+  // monto_fecha_ambiguo = hay varios candidatos → NO liga (aprobar normal)
+  match_por: "rastreo" | "casa" | "monto_fecha" | "monto_fecha_ambiguo" | null;
+  candidatos: number | null;
 };
 // Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
 type CasaFin = { id: string; numero: string; propia: boolean };
@@ -267,7 +270,10 @@ export default function PagosPage() {
     setResolviendo((s) => new Set(s).add(id));
     // Si el abono YA apareció en el estado de cuenta (palomita), aprobar también
     // liga la fila del banco (aprobar_abono_banco) → no se re-ofrece al conciliar.
-    const conBanco = aprobar && t.en_banco && !!t.banco_hash;
+    // SOLO con match seguro (rastreo/casa/1-a-1): un match ambiguo por monto+fecha
+    // podría ligar la fila de OTRA casa (muchas pagan lo mismo el mismo día).
+    const conBanco =
+      aprobar && t.en_banco && !!t.banco_hash && t.match_por !== "monto_fecha_ambiguo";
     const res = conBanco
       ? await callRpc("aprobar_abono_banco", { p_id: id, p_banco_hash: t.banco_hash })
       : await callRpc("resolver_transaccion", { p_id: id, p_aprobar: aprobar });
@@ -444,11 +450,21 @@ export default function PagosPage() {
                             {t.concepto} · {fecha(t.created_at)}
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                            {/* Palomita: el pago SÍ aparece en el estado de cuenta guardado */}
-                            {t.en_banco && t.banco_fecha && (
+                            {/* Palomita VERDE solo con match seguro; ámbar si es ambiguo */}
+                            {t.en_banco && t.banco_fecha && t.match_por !== "monto_fecha_ambiguo" && (
                               <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                                 ✓ encontrado en el banco ({fechaDia(t.banco_fecha)}
-                                {t.match_por === "rastreo" ? " · por clave de rastreo" : " · por monto y fecha"})
+                                {t.match_por === "rastreo"
+                                  ? " · por clave de rastreo"
+                                  : t.match_por === "casa"
+                                  ? " · el banco menciona la casa"
+                                  : " · único que cuadra por monto y fecha"})
+                              </span>
+                            )}
+                            {t.en_banco && t.match_por === "monto_fecha_ambiguo" && (
+                              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                                🟡 hay {t.candidatos ?? "varios"} pagos con este monto en esas fechas — al
+                                aprobar NO se liga al banco; concílialo en Conciliación
                               </span>
                             )}
                             {/* Monto del comprobante (OCR) vs lo que capturó el vecino */}
