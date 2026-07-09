@@ -370,6 +370,17 @@ export default function PanelComite() {
             <span className="ml-auto text-brand-500 text-lg">›</span>
           </button>
           <button
+            onClick={() => router.push("/dashboard/multas")}
+            className="mt-2 w-full rounded-2xl bg-white ring-1 ring-slate-100 p-3.5 flex items-center gap-3 text-left hover:ring-brand-200 transition shadow-sm"
+          >
+            <span className="text-2xl">🚨</span>
+            <span>
+              <span className="block font-semibold text-slate-800 text-sm">Multas por casa</span>
+              <span className="block text-xs text-slate-500">Revisa, corrige el monto o cancela multas duplicadas</span>
+            </span>
+            <span className="ml-auto text-brand-500 text-lg">›</span>
+          </button>
+          <button
             onClick={() => router.push("/dashboard/reporte-multas")}
             className="mt-2 w-full rounded-2xl bg-white ring-1 ring-slate-100 p-3.5 flex items-center gap-3 text-left hover:ring-brand-200 transition shadow-sm"
           >

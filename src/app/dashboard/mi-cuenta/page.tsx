@@ -173,6 +173,16 @@ export default function MiCuentaPage() {
                         {fecha(m.created_at)}
                         {m.estado === "aprobado" ? ` · saldo ${money(saldo)}` : ` · ${m.estado}`}
                       </p>
+                      {m.comprobante_url && (
+                        <a
+                          href={m.comprobante_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-brand-600 font-semibold underline"
+                        >
+                          📎 Ver comprobante
+                        </a>
+                      )}
                       {esMulta(m) && (
                         <div className="mt-1.5">
                           <VerResolucionButton transactionId={m.id} />

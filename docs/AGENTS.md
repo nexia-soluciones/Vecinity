@@ -911,3 +911,31 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - [ ] Storage buckets (comprobantes, INE, placas, evidencias, market)
 - [ ] Suspensión RFID gobernada (umbral + aprobación comité/votación)
 - [ ] Deploy EasyPanel
+
+## Sesión 2026-07-08 — Comprobantes en mi-cuenta + módulo Multas por casa
+- **Comprobantes visibles para el vecino**: `mi-cuenta` ya consultaba `comprobante_url`
+  pero no lo renderizaba — agregado link "📎 Ver comprobante" en cada movimiento
+  (mismo patrón que la vista del comité en estado-cuenta).
+- **Migr. 054 — gestión de multas** (2 RPCs SECURITY DEFINER + is_admin, aplicada en prod):
+  - `corregir_multa(incident, nuevo_monto, nota)`: ajusta `monto_multa` + el cargo ligado
+    + `houses.saldo` por la diferencia (recalc estatus, respeta `tope_multa`); anexa nota
+    de auditoría a `resolucion_admin` e invalida `resolucion_oficial` (citaba el monto
+    viejo — la UI la regenera best-effort con `generarResolucionOficial`).
+  - `cancelar_multa(incident, nota)`: nota OBLIGATORIA; cargo → `rechazado` (queda tachado
+    en el historial con su monto para auditoría), saldo revertido (puede quedar a favor si
+    ya se pagó), incident → `rechazado`, y `resolucion_oficial` determinista "# Multa
+    cancelada" con fecha MX + motivo (el vecino la ve en su modal de resolución).
+  - Una multa vive en 3 lugares (incident + transactions + houses.saldo): ambas RPCs los
+    mantienen consistentes con FOR UPDATE en incident y transaction.
+- **UI `/dashboard/multas`** (guard admin/comité): buscador por número de casa → multas
+  activas (categoría, fecha, casa reportante, descripción, evidencia, Ver resolución) con
+  "✏️ Corregir monto" y "Cancelar multa" (motivo obligatorio) + historial colapsable
+  (rechazadas/canceladas con su nota). Tarjeta 🚨 "Multas por casa" en el panel del comité.
+- **QA**: probado en prod con BEGIN/ROLLBACK impersonando al perfil comité
+  (`set_config request.jwt.claims`): corrección 300→150 bajó saldo 1650→1500, cancelación
+  revirtió 300 más (→1200), notas y resolución de cancelación correctas; rollback verificado
+  (casa 170 quedó intacta: saldo 1650, 3 multas activas). `npm run build` limpio.
+- **Caso que motivó el módulo**: casa 170 (Rosario) con 3 multas activas de $300
+  "Estacionamiento Prohibido" (31 may, 13 jun, 14 jun, todas reportadas por la 166) — Juan
+  decidirá cuál cancelar como duplicada desde el módulo nuevo.
+- ⏳ PENDIENTE DE JUAN: deploy EasyPanel (la migración 054 ya está aplicada en la BD).
