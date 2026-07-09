@@ -939,3 +939,6 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   "Estacionamiento Prohibido" (31 may, 13 jun, 14 jun, todas reportadas por la 166) — Juan
   decidirá cuál cancelar como duplicada desde el módulo nuevo.
 - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (la migración 054 ya está aplicada en la BD).
+- **Fix vigilancia (fa4f12f)**: en Recurrentes/Reservas/Historial la casa iba al final de
+  una línea con `truncate` y se cortaba ("Limpieza Casa 1…") — ahora "Casa N" va PRIMERO
+  (y en negritas en recurrentes); lo que se trunca es el tipo/nombre, nunca la casa.
