@@ -1002,3 +1002,8 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   menciona OTRA casa válida, el candidato se descarta. QA con rollback: los $750
   reales dieron 18 candidatos → ámbar ✓; $333.33 único → verde 1:1 ✓; "CASA 242" en
   concepto → verde por casa ✓; "C127" con abono de la 242 → sin palomita ✓.
+- **Pagos: sección "Banco: ingresos sin conciliar"** (pedido Juan): lista las filas del
+  staging (`bank_movs` estado pendiente, tipo abono) en la misma pantalla de Pagos, con
+  botón Descartar en dos taps (primero confirma, `onBlur` cancela) vía
+  `descartar_mov_banco`; al descartar se recargan pendientes (cambian palomitas y
+  ambigüedades). Link directo a Conciliación para asignar casa.

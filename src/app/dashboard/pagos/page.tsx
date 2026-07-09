@@ -33,6 +33,9 @@ type Pend = Mov & {
 // Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
 type CasaFin = { id: string; numero: string; propia: boolean };
 
+// Fila del banco (bank_movs) aún sin conciliar — para revisarla/descartarla aquí mismo
+type MovBanco = { fecha: string; monto: number; concepto: string; banco_hash: string };
+
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 const fecha = (iso: string) =>
@@ -77,6 +80,9 @@ export default function PagosPage() {
   // Corrección de monto antes de aprobar (vecino capturó mal, ej. 750 vs 450)
   const [editId, setEditId] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
+  // Movimientos del banco sin conciliar + confirmación de descarte en dos taps
+  const [movsBanco, setMovsBanco] = useState<MovBanco[]>([]);
+  const [descartando, setDescartando] = useState<string | null>(null);
 
   const cargarSaldo = useCallback(async (hid: string) => {
     const { data } = await supabaseBrowser
@@ -104,6 +110,15 @@ export default function PagosPage() {
     // + monto OCR del comprobante para comparar contra lo capturado.
     const { data } = await supabaseBrowser.rpc("abonos_pendientes_comite");
     setPend((data as unknown as Pend[]) ?? []);
+
+    // Ingresos del banco (staging) aún sin conciliar — para descartarlos aquí mismo
+    const { data: mb } = await supabaseBrowser
+      .from("bank_movs")
+      .select("fecha, monto, concepto, banco_hash")
+      .eq("estado", "pendiente")
+      .eq("tipo", "abono")
+      .order("fecha");
+    setMovsBanco((mb as unknown as MovBanco[]) ?? []);
 
     // Abonos que YA se conciliaron con el banco (banco_hash) → para avisar cuando
     // un comprobante pendiente ya está cubierto por el banco (posible duplicado).
@@ -314,6 +329,20 @@ export default function PagosPage() {
     if (!res.ok) return setPendErr(res.error);
     setEditId(null);
     setEditVal("");
+    await cargarPend();
+  }
+
+  // Descarta una fila del banco que no es pago de vecino (traspaso, interés…).
+  // Dos taps: el primero pide confirmar, el segundo descarta.
+  async function descartarBanco(hash: string) {
+    if (descartando !== hash) {
+      setDescartando(hash);
+      return;
+    }
+    setDescartando(null);
+    const res = await callRpc("descartar_mov_banco", { p_banco_hash: hash });
+    if (!res.ok) return setPendErr(res.error);
+    // recargar: sin esa fila cambian también las palomitas/ambigüedades
     await cargarPend();
   }
 
@@ -558,6 +587,57 @@ export default function PagosPage() {
                 })}
               </ul>
             )}
+          </section>
+        )}
+
+        {/* Comité: ingresos del banco aún sin conciliar (staging) */}
+        {isAdmin && movsBanco.length > 0 && (
+          <section className="mt-7">
+            <h2 className="text-sm font-bold text-slate-700 mb-1">
+              Banco: ingresos sin conciliar{" "}
+              <span className="text-slate-400 font-medium">({movsBanco.length})</span>
+            </h2>
+            <p className="text-xs text-slate-500 mb-2">
+              Filas del estado de cuenta que aún no se ligan a ninguna casa. Asígnalas en{" "}
+              <button
+                onClick={() => router.push("/dashboard/conciliacion")}
+                className="underline font-semibold text-brand-600"
+              >
+                Conciliación
+              </button>{" "}
+              o descarta las que no son pagos de vecinos (traspasos, intereses…).
+            </p>
+            <ul className="flex flex-col gap-2">
+              {movsBanco.map((m) => (
+                <li
+                  key={m.banco_hash}
+                  className="bg-white rounded-2xl p-3 ring-1 ring-slate-100 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800">
+                      {money(m.monto)}{" "}
+                      <span className="text-xs font-medium text-slate-500">
+                        · {fechaDia(m.fecha)}
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-500 truncate" title={m.concepto}>
+                      {m.concepto}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => descartarBanco(m.banco_hash)}
+                    onBlur={() => setDescartando((d) => (d === m.banco_hash ? null : d))}
+                    className={`shrink-0 rounded-xl text-xs font-semibold px-3 py-2 transition ${
+                      descartando === m.banco_hash
+                        ? "bg-red-600 text-white"
+                        : "border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    {descartando === m.banco_hash ? "¿Seguro? Descartar" : "Descartar"}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
