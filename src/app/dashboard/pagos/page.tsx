@@ -25,9 +25,9 @@ type Pend = Mov & {
   en_banco: boolean;
   banco_hash: string | null;
   banco_fecha: string | null;
-  // rastreo/casa/monto_fecha = match SEGURO (liga al aprobar);
+  // rastreo/casa/aprendido/monto_fecha = match SEGURO (liga al aprobar);
   // monto_fecha_ambiguo = hay varios candidatos → NO liga (aprobar normal)
-  match_por: "rastreo" | "casa" | "monto_fecha" | "monto_fecha_ambiguo" | null;
+  match_por: "rastreo" | "casa" | "aprendido" | "monto_fecha" | "monto_fecha_ambiguo" | null;
   candidatos: number | null;
 };
 // Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
@@ -83,6 +83,10 @@ export default function PagosPage() {
   // Movimientos del banco sin conciliar + confirmación de descarte en dos taps
   const [movsBanco, setMovsBanco] = useState<MovBanco[]>([]);
   const [descartando, setDescartando] = useState<string | null>(null);
+  // Enlace manual abono↔banco (con motivo que sirve de aprendizaje)
+  const [linkId, setLinkId] = useState<string | null>(null);
+  const [linkHash, setLinkHash] = useState<string | null>(null);
+  const [linkMotivo, setLinkMotivo] = useState("");
 
   const cargarSaldo = useCallback(async (hid: string) => {
     const { data } = await supabaseBrowser
@@ -332,6 +336,51 @@ export default function PagosPage() {
     await cargarPend();
   }
 
+  // Candidatos del banco para enlazar un abono: SOLO mismo monto (el servidor lo
+  // exige — si el monto está mal, primero se corrige), ordenados por cercanía de fecha.
+  function candidatosBanco(t: Pend): MovBanco[] {
+    const base = new Date(`${(t.ocr_fecha ?? t.created_at).slice(0, 10)}T12:00:00`).getTime();
+    return movsBanco
+      .filter((m) => Math.abs(Number(m.monto) - t.monto) < 0.01)
+      .sort(
+        (a, b) =>
+          Math.abs(new Date(`${a.fecha}T12:00:00`).getTime() - base) -
+          Math.abs(new Date(`${b.fecha}T12:00:00`).getTime() - base)
+      );
+  }
+
+  // Enlaza el abono a la fila del banco elegida y lo aprueba. El motivo queda
+  // auditado y la referencia del banco se APRENDE (bank_ref_map) → el próximo
+  // mes ese vecino sale con palomita solo.
+  async function enlazar(t: Pend) {
+    if (!linkHash || resolviendo.has(t.id)) return;
+    setPendErr(null);
+    setResolviendo((s) => new Set(s).add(t.id));
+    const res = await callRpc("enlazar_abono_banco", {
+      p_id: t.id,
+      p_banco_hash: linkHash,
+      p_motivo: linkMotivo.trim() || null,
+    });
+    const dup = res.ok && (res.data as { dup?: boolean } | null)?.dup;
+    setResolviendo((s) => {
+      const n = new Set(s);
+      n.delete(t.id);
+      return n;
+    });
+    if (!res.ok || dup) {
+      setPendErr(!res.ok ? res.error : "Esa fila del banco ya se ligó a otro pago — recarga.");
+      return;
+    }
+    setLinkId(null);
+    setLinkHash(null);
+    setLinkMotivo("");
+    await cargarPend();
+    if (houseId) {
+      await cargarSaldo(houseId);
+      await cargarMovs(houseId);
+    }
+  }
+
   // Descarta una fila del banco que no es pago de vecino (traspaso, interés…).
   // Dos taps: el primero pide confirmar, el segundo descarta.
   async function descartarBanco(hash: string) {
@@ -487,6 +536,8 @@ export default function PagosPage() {
                                   ? " · por clave de rastreo"
                                   : t.match_por === "casa"
                                   ? " · el banco menciona la casa"
+                                  : t.match_por === "aprendido"
+                                  ? " · referencia aprendida"
                                   : " · único que cuadra por monto y fecha"})
                               </span>
                             )}
@@ -537,7 +588,94 @@ export default function PagosPage() {
                                 ✏️ Corregir monto
                               </button>
                             )}
+                            {linkId !== t.id && movsBanco.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  setLinkId(t.id);
+                                  setLinkHash(candidatosBanco(t)[0]?.banco_hash ?? null);
+                                  setLinkMotivo("");
+                                }}
+                                className="text-xs text-slate-500 font-semibold underline hover:text-slate-700"
+                              >
+                                🔗 Enlazar al banco
+                              </button>
+                            )}
                           </div>
+                          {/* Enlace manual: elegir la fila del banco + motivo (aprendizaje) */}
+                          {linkId === t.id && (
+                            <div className="mt-2 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-2">
+                              {candidatosBanco(t).length === 0 ? (
+                                <p className="text-[11px] text-slate-600">
+                                  No hay movimientos del banco por {money(t.monto)} sin conciliar.
+                                  Si el monto está mal, usa ✏️ Corregir monto primero.
+                                </p>
+                              ) : (
+                                <>
+                                  <p className="text-[11px] font-semibold text-slate-600 mb-1">
+                                    ¿Cuál movimiento del banco es este pago?
+                                  </p>
+                                  <div className="flex flex-col gap-1 max-h-44 overflow-y-auto">
+                                    {candidatosBanco(t).map((m) => (
+                                      <label
+                                        key={m.banco_hash}
+                                        className={`flex items-start gap-2 rounded-lg px-2 py-1.5 cursor-pointer ring-1 ${
+                                          linkHash === m.banco_hash
+                                            ? "bg-brand-50 ring-brand-300"
+                                            : "bg-white ring-slate-200"
+                                        }`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          name={`link-${t.id}`}
+                                          checked={linkHash === m.banco_hash}
+                                          onChange={() => setLinkHash(m.banco_hash)}
+                                          className="mt-0.5 accent-brand-500"
+                                        />
+                                        <span className="min-w-0 text-[11px] text-slate-700">
+                                          <span className="font-bold">{money(Number(m.monto))}</span> ·{" "}
+                                          {fechaDia(m.fecha)}
+                                          <span className="block text-slate-500 truncate" title={m.concepto}>
+                                            {m.concepto}
+                                          </span>
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <input
+                                    value={linkMotivo}
+                                    onChange={(e) => setLinkMotivo(e.target.value)}
+                                    placeholder="¿Cómo lo identificaste? (opcional — ayuda a aprender)"
+                                    className="mt-2 w-full rounded-lg ring-1 ring-slate-200 px-2 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                                  />
+                                  <p className="mt-1 text-[10px] text-slate-400">
+                                    Al enlazar, la referencia del banco se aprende para esta casa: el
+                                    próximo mes saldrá con palomita solo.
+                                  </p>
+                                </>
+                              )}
+                              <div className="mt-2 flex items-center gap-2">
+                                {candidatosBanco(t).length > 0 && (
+                                  <button
+                                    onClick={() => enlazar(t)}
+                                    disabled={!linkHash || resolviendo.has(t.id)}
+                                    className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-40"
+                                  >
+                                    {resolviendo.has(t.id) ? "…" : "Enlazar y aprobar"}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setLinkId(null);
+                                    setLinkHash(null);
+                                    setLinkMotivo("");
+                                  }}
+                                  className="rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1.5 hover:bg-slate-200"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           {editId === t.id && (
                             <div className="mt-2 flex items-center gap-2">
                               <input

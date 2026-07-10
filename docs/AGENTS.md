@@ -1007,3 +1007,20 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   botón Descartar en dos taps (primero confirma, `onBlur` cancela) vía
   `descartar_mov_banco`; al descartar se recargan pendientes (cambian palomitas y
   ambigüedades). Link directo a Conciliación para asignar casa.
+- **Migr. 058 — enlace manual abono↔banco con APRENDIZAJE** (pedido Juan; caso casa 163:
+  fecha del comprobante 4-jul y no 6-jul → el cruce automático no lo agarraba):
+  - `enlazar_abono_banco(abono, fila, motivo?)`: exige monto igual (si no, "corrige
+    primero el monto"), liga banco_hash + aprueba, audita el motivo en el concepto del
+    abono Y en `bank_movs.nota`, y APRENDE: guarda `_norm_ref_key(concepto_banco)` →
+    casa en `bank_ref_map` (mismo mapa que autosugiere en /conciliacion).
+  - `abonos_pendientes_comite` v3: nuevo nivel **'aprendido'** (referencia enseñada +
+    monto exacto, SIN exigir fecha) — verde/seguro, prioridad rastreo > casa > aprendido
+    > monto_fecha 1:1 > ambiguo.
+  - UI Pagos: botón "🔗 Enlazar al banco" en cada card por-aprobar → candidatos del
+    banco del MISMO monto ordenados por cercanía de fecha (radio), campo "¿cómo lo
+    identificaste?" (opcional) y "Enlazar y aprobar". Si no hay candidatos del monto,
+    sugiere Corregir monto.
+  - QA rollback: enlace+auditoría+nota ✓, bank_ref_map aprendió (casa 242) ✓, mes
+    siguiente con fecha fuera de ±3d → match 'aprendido' ✓, montos distintos → error
+    claro ✓. Gotcha QA: anti-dup de 10 min (misma casa+monto) obliga a variar montos
+    en escenarios de prueba consecutivos.
