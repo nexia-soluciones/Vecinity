@@ -15,6 +15,9 @@ type Mov = {
   estado: string;
   comprobante_url: string | null;
   created_at: string;
+  // Aclaración pedida por el comité sobre este movimiento (y la respuesta del vecino)
+  aclaracion_solicitud?: string | null;
+  aclaracion_respuesta?: string | null;
 };
 // Pendiente por aprobar (RPC abonos_pendientes_comite): incluye la palomita del
 // banco (en_banco + banco_fecha/hash) y el monto leído por OCR del comprobante.
@@ -29,6 +32,8 @@ type Pend = Mov & {
   // monto_fecha_ambiguo = hay varios candidatos → NO liga (aprobar normal)
   match_por: "rastreo" | "casa" | "aprendido" | "monto_fecha" | "monto_fecha_ambiguo" | null;
   candidatos: number | null;
+  aclaracion: string | null;
+  aclaracion_respuesta: string | null;
 };
 // Casa cuyas finanzas puedo operar: donde vivo o donde soy propietario (casa rentada)
 type CasaFin = { id: string; numero: string; propia: boolean };
@@ -49,7 +54,8 @@ const fechaDia = (iso: string) =>
   });
 
 const BUCKET = "vecino-comprobantes";
-const MOV_COLS = "id, tipo, monto, concepto, estado, comprobante_url, created_at";
+const MOV_COLS =
+  "id, tipo, monto, concepto, estado, comprobante_url, created_at, aclaracion_solicitud, aclaracion_respuesta";
 
 // Clave casa|monto|añoMes para cruzar un comprobante pendiente contra los abonos
 // que ya se conciliaron con el banco (mismo mes) → detectar posible duplicado.
@@ -87,6 +93,11 @@ export default function PagosPage() {
   const [linkId, setLinkId] = useState<string | null>(null);
   const [linkHash, setLinkHash] = useState<string | null>(null);
   const [linkMotivo, setLinkMotivo] = useState("");
+  // Respuesta del vecino a una aclaración pedida por el comité
+  const [respId, setRespId] = useState<string | null>(null);
+  const [respFecha, setRespFecha] = useState("");
+  const [respTexto, setRespTexto] = useState("");
+  const [respMsg, setRespMsg] = useState<string | null>(null);
 
   const cargarSaldo = useCallback(async (hid: string) => {
     const { data } = await supabaseBrowser
@@ -381,6 +392,39 @@ export default function PagosPage() {
     }
   }
 
+  // Pide al vecino los datos que faltan del comprobante (mensaje formal automático
+  // según lo que no se pudo leer). Le llega por Telegram (si lo tiene ligado) y
+  // como banner sobre su movimiento en la app.
+  async function pedirDatos(t: Pend) {
+    if (resolviendo.has(t.id)) return;
+    setPendErr(null);
+    setResolviendo((s) => new Set(s).add(t.id));
+    const res = await callRpc("solicitar_aclaracion_abono", { p_id: t.id });
+    setResolviendo((s) => {
+      const n = new Set(s);
+      n.delete(t.id);
+      return n;
+    });
+    if (!res.ok) return setPendErr(res.error);
+    await cargarPend();
+  }
+
+  // El vecino responde la aclaración: su fecha alimenta la conciliación.
+  async function responderAclaracion(mov: Mov) {
+    setRespMsg(null);
+    if (!respFecha && !respTexto.trim()) return setRespMsg("Indica la fecha o escribe el concepto.");
+    const res = await callRpc("responder_aclaracion_abono", {
+      p_id: mov.id,
+      p_fecha: respFecha || null,
+      p_texto: respTexto.trim() || null,
+    });
+    if (!res.ok) return setRespMsg(res.error);
+    setRespId(null);
+    setRespFecha("");
+    setRespTexto("");
+    if (houseId) await cargarMovs(houseId);
+  }
+
   // Descarta una fila del banco que no es pago de vecino (traspaso, interés…).
   // Dos taps: el primero pide confirmar, el segundo descarta.
   async function descartarBanco(hash: string) {
@@ -600,7 +644,27 @@ export default function PagosPage() {
                                 🔗 Enlazar al banco
                               </button>
                             )}
+                            {!t.aclaracion && (
+                              <button
+                                onClick={() => pedirDatos(t)}
+                                disabled={resolviendo.has(t.id)}
+                                className="text-xs text-slate-500 font-semibold underline hover:text-slate-700 disabled:opacity-40"
+                                title="Le llega por Telegram y en su app: pide fecha/concepto del comprobante"
+                              >
+                                ✉️ Pedir datos
+                              </button>
+                            )}
                           </div>
+                          {t.aclaracion && !t.aclaracion_respuesta && (
+                            <p className="mt-1 text-[10px] font-semibold text-sky-700">
+                              ✉️ Aclaración pedida al vecino — esperando respuesta
+                            </p>
+                          )}
+                          {t.aclaracion_respuesta && (
+                            <p className="mt-1 text-[11px] text-emerald-800 bg-emerald-50 ring-1 ring-emerald-200 rounded-lg px-2 py-1">
+                              💬 Vecino respondió: {t.aclaracion_respuesta}
+                            </p>
+                          )}
                           {/* Enlace manual: elegir la fila del banco + motivo (aprendizaje) */}
                           {linkId === t.id && (
                             <div className="mt-2 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-2">
@@ -790,32 +854,94 @@ export default function PagosPage() {
             <ul className="flex flex-col gap-2">
               {movs.map((t) => {
                 const esAbono = t.tipo === "abono";
+                const pideAclaracion =
+                  t.estado === "pendiente" && !!t.aclaracion_solicitud && !t.aclaracion_respuesta;
                 return (
-                  <li
-                    key={t.id}
-                    className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 truncate">{t.concepto}</p>
-                      <p className="text-xs text-slate-500">{fecha(t.created_at)}</p>
-                      <span
-                        className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                          t.estado === "aprobado"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : t.estado === "pendiente"
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-red-50 text-red-600"
-                        }`}
+                  <li key={t.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{t.concepto}</p>
+                        <p className="text-xs text-slate-500">{fecha(t.created_at)}</p>
+                        <span
+                          className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            t.estado === "aprobado"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : t.estado === "pendiente"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-600"
+                          }`}
+                        >
+                          {t.estado}
+                        </span>
+                      </div>
+                      <p
+                        className={`font-bold shrink-0 ${esAbono ? "text-emerald-600" : "text-slate-700"}`}
                       >
-                        {t.estado}
-                      </span>
+                        {esAbono ? "−" : "+"}
+                        {money(t.monto)}
+                      </p>
                     </div>
-                    <p
-                      className={`font-bold shrink-0 ${esAbono ? "text-emerald-600" : "text-slate-700"}`}
-                    >
-                      {esAbono ? "−" : "+"}
-                      {money(t.monto)}
-                    </p>
+
+                    {/* El comité pidió datos de este comprobante → responder aquí */}
+                    {pideAclaracion && (
+                      <div className="mt-2 rounded-xl bg-sky-50 ring-1 ring-sky-200 p-2.5">
+                        <p className="text-[11px] text-sky-900">📩 {t.aclaracion_solicitud}</p>
+                        {respId === t.id ? (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <label className="text-[11px] text-slate-600">
+                              Fecha en que hiciste la transferencia
+                              <input
+                                type="date"
+                                value={respFecha}
+                                onChange={(e) => setRespFecha(e.target.value)}
+                                className="mt-0.5 w-full rounded-lg ring-1 ring-slate-200 px-2 py-1.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-sky-300"
+                              />
+                            </label>
+                            <input
+                              value={respTexto}
+                              onChange={(e) => setRespTexto(e.target.value)}
+                              placeholder="Concepto que colocaste / comentarios"
+                              className="w-full rounded-lg ring-1 ring-slate-200 px-2 py-1.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-sky-300"
+                            />
+                            {respMsg && <p className="text-[11px] text-red-600">{respMsg}</p>}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => responderAclaracion(t)}
+                                className="rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                              >
+                                Enviar respuesta
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRespId(null);
+                                  setRespMsg(null);
+                                }}
+                                className="rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1.5 hover:bg-slate-200"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setRespId(t.id);
+                              setRespFecha("");
+                              setRespTexto("");
+                              setRespMsg(null);
+                            }}
+                            className="mt-2 rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                          >
+                            Responder
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {t.aclaracion_respuesta && t.estado === "pendiente" && (
+                      <p className="mt-2 text-[11px] text-emerald-800 bg-emerald-50 ring-1 ring-emerald-200 rounded-lg px-2 py-1">
+                        ✓ Respondiste: {t.aclaracion_respuesta}
+                      </p>
+                    )}
                   </li>
                 );
               })}

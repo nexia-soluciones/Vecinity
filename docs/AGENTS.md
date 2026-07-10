@@ -1024,3 +1024,20 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
     siguiente con fecha fuera de ±3d → match 'aprendido' ✓, montos distintos → error
     claro ✓. Gotcha QA: anti-dup de 10 min (misma casa+monto) obliga a variar montos
     en escenarios de prueba consecutivos.
+- **Migr. 059 — aclaración de comprobantes ilegibles** (pedido Juan: "su comprobante no
+  cuenta con fecha… ¿nos puede decir la fecha y el concepto?"):
+  - `solicitar_aclaracion_abono(id, mensaje?)` (comité): mensaje formal AUTOMÁTICO según
+    lo que falte en el OCR (fecha/concepto), se guarda sobre el movimiento y sale por
+    Telegram (tg_send best-effort) a los perfiles de la casa con chat ligado (residentes
+    + house_members). `responder_aclaracion_abono(id, fecha?, texto?)` (vecino, gateada
+    por my_finance_house_ids): guarda la respuesta y **inyecta la fecha al
+    comprobante_ocr** (`fecha_fuente:'vecino'`) → el cruce con el banco la usa y la
+    palomita aparece sola. `abonos_pendientes_comite` v4 expone aclaración/respuesta.
+  - UI Pagos: comité "✉️ Pedir datos" por card (badge "esperando respuesta" → caja verde
+    "💬 Vecino respondió"); vecino ve banner azul en Mis movimientos con el mensaje +
+    fecha/concepto + Enviar respuesta.
+  - GOTCHA SQL: `jsonb || NULL = NULL` — al mergear piezas condicionales al OCR, cada
+    CASE va envuelto en `coalesce(…,'{}'::jsonb)` o borra el objeto completo.
+  - QA rollback: mensaje automático correcto + 1 Telegram (revertido) ✓, responder sin
+    solicitud ✗, otro vecino ✗, respuesta inyecta fecha al OCR ✓, y el abono pasó de
+    en_banco:false a match monto_fecha 1:1 tras responder ✓.
