@@ -7,6 +7,14 @@ import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
 import { leerPlaca } from "./actions";
+import {
+  comprimirFoto,
+  guardarBorradorTexto,
+  leerBorradorTexto,
+  guardarFotoDraft,
+  borrarFotoDraft,
+  leerFotosDraft,
+} from "@/lib/draftGuardia";
 
 type Visita = {
   id: string;
@@ -173,6 +181,9 @@ export default function VigilanciaPage() {
   const [morosos, setMorosos] = useState<Moroso[]>([]);
   // Umbral de adeudo (por villa) que restringe servicios extra
   const [umbralServicios, setUmbralServicios] = useState<number>(SALDO_RESTRINGIDO_DEFAULT);
+
+  // Aviso de que se restauró una captura a medias (Android mató la PWA al abrir la cámara)
+  const [recuperado, setRecuperado] = useState(false);
 
   // Cono asignado a una visita al ingresar (se guarda en localStorage del dispositivo)
   const [conos, setConos] = useState<Record<string, string>>({});
@@ -386,6 +397,7 @@ export default function VigilanciaPage() {
     setScanIne(null);
     setScanPlaca(null);
     setScanMsg(null);
+    void borrarFotoDraft("scan:ine", "scan:placa");
   }
 
   async function entradaDesdeScan() {
@@ -490,6 +502,90 @@ export default function VigilanciaPage() {
       /* ignore */
     }
   }, []);
+
+  // Restaurar la captura a medias si Android mató la PWA mientras el guardia tomaba
+  // la foto (tablets con poca RAM): textos desde localStorage, fotos desde IndexedDB.
+  useEffect(() => {
+    (async () => {
+      let restaurado = false;
+      const draft = leerBorradorTexto() as {
+        mvNombre?: string;
+        mvCasa?: string;
+        mvPlaca?: string;
+        npNombre?: string;
+        npTipo?: string;
+        npCasa?: string;
+        pkgCasa?: string;
+        pkgRem?: string;
+        scanVisit?: { id: string; nombre: string; estado: string; casa: string | null } | null;
+      } | null;
+      if (draft) {
+        if (draft.mvNombre) setMvNombre(draft.mvNombre);
+        if (draft.mvCasa) setMvCasa(draft.mvCasa);
+        if (draft.mvPlaca) setMvPlaca(draft.mvPlaca);
+        if (draft.npNombre) setNpNombre(draft.npNombre);
+        if (draft.npTipo) setNpTipo(draft.npTipo);
+        if (draft.npCasa) setNpCasa(draft.npCasa);
+        if (draft.npNombre || draft.npCasa) setShowAdd(true);
+        if (draft.pkgCasa) setPkgCasa(draft.pkgCasa);
+        if (draft.pkgRem) setPkgRem(draft.pkgRem);
+        if (draft.scanVisit?.id) {
+          setScanVisit(draft.scanVisit);
+          setScanOpen(true);
+        }
+        restaurado = true;
+      }
+      const fotos = await leerFotosDraft();
+      for (const [key, foto] of Object.entries(fotos)) {
+        if (key === "mv:ine") setMvIne(foto);
+        else if (key === "mv:placa") setMvPlacaFoto(foto);
+        else if (key === "np:foto") setNpFile(foto);
+        else if (key === "scan:ine") setScanIne(foto);
+        else if (key === "scan:placa") setScanPlaca(foto);
+        else if (key.startsWith("ine:")) setIneStaged((s) => ({ ...s, [key.slice(4)]: foto }));
+        else if (key.startsWith("prov:")) setStaged((s) => ({ ...s, [key.slice(5)]: foto }));
+        restaurado = true;
+      }
+      if (restaurado) setRecuperado(true);
+    })();
+  }, []);
+
+  // Respaldar los textos de captura en cada cambio; cuando todo queda vacío
+  // (p. ej. tras registrar), el borrador se limpia solo.
+  useEffect(() => {
+    if (!ready) return;
+    guardarBorradorTexto({
+      mvNombre,
+      mvCasa,
+      mvPlaca,
+      npNombre,
+      // "limpieza" es el valor por defecto del select: solo cuenta como avance si
+      // el guardia ya escribió algo más del proveedor.
+      npTipo: npNombre.trim() || npCasa.trim() ? npTipo : "",
+      npCasa,
+      pkgCasa,
+      pkgRem,
+      scanVisit,
+    });
+  }, [ready, mvNombre, mvCasa, mvPlaca, npNombre, npTipo, npCasa, pkgCasa, pkgRem, scanVisit]);
+
+  // Toma la foto elegida, la comprime (menos memoria y datos en la tablet) y la
+  // respalda en IndexedDB antes de dejarla en el estado del formulario.
+  async function elegirFoto(
+    e: React.ChangeEvent<HTMLInputElement>,
+    key: string,
+    set: (f: File | null) => void
+  ) {
+    const original = e.target.files?.[0] ?? null;
+    if (!original) {
+      set(null);
+      void borrarFotoDraft(key);
+      return;
+    }
+    const foto = await comprimirFoto(original);
+    set(foto);
+    void guardarFotoDraft(key, foto);
+  }
 
   function guardarCono() {
     if (!conoFor) return;
@@ -642,6 +738,9 @@ export default function VigilanciaPage() {
     pkgRem.trim() !== "" ||
     placaQ.trim() !== "" ||
     dirQ.trim() !== "" ||
+    mvIne !== null ||
+    mvPlacaFoto !== null ||
+    npFile !== null ||
     Object.keys(ineStaged).length > 0 ||
     Object.keys(staged).length > 0;
 
@@ -692,6 +791,7 @@ export default function VigilanciaPage() {
       delete n[providerId];
       return n;
     });
+    void borrarFotoDraft(`prov:${providerId}`);
     await cargarRecurrentes();
   }
 
@@ -723,6 +823,7 @@ export default function VigilanciaPage() {
     setNpCasa("");
     setNpFile(null);
     setShowAdd(false);
+    void borrarFotoDraft("np:foto");
     await cargarRecurrentes();
   }
 
@@ -749,6 +850,7 @@ export default function VigilanciaPage() {
         delete n[id];
         return n;
       });
+      void borrarFotoDraft(`ine:${id}`);
     }
     await supabaseBrowser.rpc(
       accion === "entrada" ? "marcar_entrada_visita" : "marcar_salida_visita",
@@ -805,6 +907,7 @@ export default function VigilanciaPage() {
     setMvPlaca("");
     setMvIne(null);
     setMvPlacaFoto(null);
+    void borrarFotoDraft("mv:ine", "mv:placa");
     await Promise.all([cargarVisitas(), cargarHistorial()]);
   }
 
@@ -884,6 +987,24 @@ export default function VigilanciaPage() {
             ? "⏸ Actualización en pausa mientras capturas"
             : "🔄 Se actualiza solo — no necesitas refrescar"}
         </p>
+
+        {/* La tablet cerró la app (p. ej. al abrir la cámara) y se restauró la captura */}
+        {recuperado && (
+          <div className="mt-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-3 flex items-start justify-between gap-2">
+            <p className="text-base text-amber-800">
+              🔁 <b>Se recuperó tu captura anterior.</b> La app se cerró (pasa al abrir la
+              cámara), pero lo que llevabas — datos y fotos — sigue aquí. Revisa y termina el
+              registro.
+            </p>
+            <button
+              onClick={() => setRecuperado(false)}
+              className="shrink-0 text-amber-500 hover:text-amber-700 text-xl leading-none"
+              aria-label="Cerrar aviso"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* 🚨 SOS activos — banner prioritario hasta arriba */}
         {sosActivos.length > 0 && (
@@ -992,21 +1113,23 @@ export default function VigilanciaPage() {
             <div className="grid grid-cols-2 gap-2">
               <label className="text-base text-slate-500">
                 Foto INE
+                {mvIne && <span className="ml-1 font-bold text-emerald-600">✓ lista</span>}
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={(e) => setMvIne(e.target.files?.[0] ?? null)}
+                  onChange={(e) => elegirFoto(e, "mv:ine", setMvIne)}
                   className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-100 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                 />
               </label>
               <label className="text-base text-slate-500">
                 Foto placas
+                {mvPlacaFoto && <span className="ml-1 font-bold text-emerald-600">✓ lista</span>}
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={(e) => setMvPlacaFoto(e.target.files?.[0] ?? null)}
+                  onChange={(e) => elegirFoto(e, "mv:placa", setMvPlacaFoto)}
                   className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-100 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                 />
               </label>
@@ -1174,9 +1297,12 @@ export default function VigilanciaPage() {
                           accept="image/*"
                     capture="environment"
                           className="hidden"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const f = e.target.files?.[0];
-                            if (f) setIneStaged((s) => ({ ...s, [v.id]: f }));
+                            if (!f) return;
+                            const foto = await comprimirFoto(f);
+                            setIneStaged((s) => ({ ...s, [v.id]: foto }));
+                            void guardarFotoDraft(`ine:${v.id}`, foto);
                           }}
                         />
                       </label>
@@ -1322,9 +1448,10 @@ export default function VigilanciaPage() {
                   type="file"
                   accept="image/*"
                     capture="environment"
-                  onChange={(e) => setNpFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => elegirFoto(e, "np:foto", setNpFile)}
                   className="flex-1 text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                 />
+                {npFile && <span className="self-center font-bold text-emerald-600">✓</span>}
               </div>
               {npMsg && <p className="text-base text-red-600">{npMsg}</p>}
               <button
@@ -1391,9 +1518,12 @@ export default function VigilanciaPage() {
                             accept="image/*"
                     capture="environment"
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const f = e.target.files?.[0];
-                              if (f) setStaged((s) => ({ ...s, [pr.id]: f }));
+                              if (!f) return;
+                              const foto = await comprimirFoto(f);
+                              setStaged((s) => ({ ...s, [pr.id]: foto }));
+                              void guardarFotoDraft(`prov:${pr.id}`, foto);
                             }}
                           />
                         </label>
@@ -1633,21 +1763,23 @@ export default function VigilanciaPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-base text-slate-500">
                         Foto INE
+                        {scanIne && <span className="ml-1 font-bold text-emerald-600">✓ lista</span>}
                         <input
                           type="file"
                           accept="image/*"
                           capture="environment"
-                          onChange={(e) => setScanIne(e.target.files?.[0] ?? null)}
+                          onChange={(e) => elegirFoto(e, "scan:ine", setScanIne)}
                           className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                         />
                       </label>
                       <label className="text-base text-slate-500">
                         Foto placas
+                        {scanPlaca && <span className="ml-1 font-bold text-emerald-600">✓ lista</span>}
                         <input
                           type="file"
                           accept="image/*"
                           capture="environment"
-                          onChange={(e) => setScanPlaca(e.target.files?.[0] ?? null)}
+                          onChange={(e) => elegirFoto(e, "scan:placa", setScanPlaca)}
                           className="mt-1 w-full text-base text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-2 file:py-1.5 file:font-semibold"
                         />
                       </label>

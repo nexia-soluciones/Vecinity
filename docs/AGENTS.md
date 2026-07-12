@@ -1041,3 +1041,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   - QA rollback: mensaje automático correcto + 1 Telegram (revertido) ✓, responder sin
     solicitud ✗, otro vecino ✗, respuesta inyecta fecha al OCR ✓, y el abono pasó de
     en_banco:false a match monto_fecha 1:1 tras responder ✓.
+- **[2026-07-11] Vigilancia: la captura sobrevive al kill de Android al abrir la cámara**
+  (reporte del guardia: registraba visita + foto y "lo sacaba de la app" con aviso de
+  falta de memoria — la tablet mata el proceso de la PWA mientras la cámara nativa está
+  abierta; al volver, la página arrancaba de cero y se perdía el registro):
+  - Nuevo `src/lib/draftGuardia.ts`: `comprimirFoto()` (canvas → JPEG máx 1280px, fail
+    open a la original), borrador de textos en localStorage (TTL 60 min, se limpia solo
+    cuando los campos quedan vacíos tras registrar) y fotos staged como Blobs en
+    IndexedDB (`vecinity-vigilancia/fotos` — sobrevive al kill del proceso).
+  - `vigilancia/page.tsx`: los 7 inputs de foto comprimen + respaldan al elegir
+    (visita manual INE/placas, modal QR INE/placas, INE staged por visita, foto de
+    proveedor staged y nuevo proveedor); al montar se restaura todo (incluido el modal
+    QR con su visita) con banner ámbar "🔁 Se recuperó tu captura anterior"; indicador
+    "✓ lista" junto a cada input (el input pierde el nombre del archivo tras restaurar);
+    el respaldo se borra en cada registro exitoso y al cerrar el modal QR.
+  - Sin cambios en BD. Nota: las fotos NUNCA pasan por la galería de la tablet (van del
+    caché del navegador a Supabase Storage) — que la galería esté vacía es normal.
+  - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (acumulado con el pendiente anterior) y
+    probar en la tablet real del guardia.
