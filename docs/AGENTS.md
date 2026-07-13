@@ -1109,3 +1109,9 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   `personalizada=true` en vehiculares; UI sin checkbox. Solicitudes vivas actualizadas:
   25 incluidas $0 + 21 vehiculares $150 + 4 visitas $150 = $3,750 por cobrar.
   Comunicado a vecinos vía módulo comunicados (RPC `crear_comunicado` con Telegram).
+- **[2026-07-13] Cierre de sesión**: comunicado del cambio de precio/personalización enviado
+  (app + 21 Telegram, id 4be51c88). Casa 130: el vecino no recordaba su correo — la cuenta
+  existente es aris_abonce@hotmail.com (aprobada, un solo login 30-jun); invitación CAT-130
+  restaurada (accepted_at=NULL, vence 22-ago) para que pueda registrarse de nuevo. La cuenta
+  vieja se dejó activa por si es de un familiar — revisar/desactivar si queda huérfana.
+  ⏳ Deploy EasyPanel pendiente con 909bece+c74444c (UI tarjetas).
