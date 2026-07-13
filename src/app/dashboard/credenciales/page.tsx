@@ -91,8 +91,6 @@ export default function CredencialesPage() {
 
   // Vecino
   const [precio, setPrecio] = useState(0);
-  const [precioPers, setPrecioPers] = useState(0);
-  const [personalizada, setPersonalizada] = useState(false);
   const [incluidaLibre, setIncluidaLibre] = useState(false);
   const [vehiculos, setVehiculos] = useState<Veh[]>([]);
   const [miembros, setMiembros] = useState<Miembro[]>([]);
@@ -144,7 +142,6 @@ export default function CredencialesPage() {
     ]);
     if (cot.ok) {
       setPrecio(Number(cot.data.precio_adicional ?? 0));
-      setPrecioPers(Number(cot.data.precio_personalizacion ?? 0));
       setIncluidaLibre(!!cot.data.incluida_disponible);
     }
     setVehiculos((vehs.data as unknown as Veh[]) ?? []);
@@ -224,21 +221,13 @@ export default function CredencialesPage() {
 
   async function solicitar(tipo: "vehicular" | "peatonal" | "visita") {
     setMsg(null);
-    const esPers = tipo === "vehicular" && personalizada;
-    const base = tipo === "vehicular" && incluidaLibre ? 0 : precio;
-    const costo = base + (esPers ? precioPers : 0);
+    const costo = tipo === "vehicular" && incluidaLibre ? 0 : precio;
     if (tipo === "vehicular" && !vehId) return setMsg("Elige el vehículo.");
     if (tipo === "peatonal" && !benefId) return setMsg("Elige para quién es.");
     if (tipo === "visita" && !visitaNombre.trim()) return setMsg("Escribe el nombre de la visita.");
-    const desglose =
-      base > 0 && esPers
-        ? ` (adicional ${mxn(base)} + personalización ${mxn(precioPers)})`
-        : esPers
-          ? " (tarjeta incluida + personalización)"
-          : "";
     const texto =
       costo > 0
-        ? `Esta tarjeta cuesta ${mxn(costo)}${desglose}. El pago es por transferencia: después de solicitarla, sube aquí tu comprobante para que el comité la apruebe. ¿Continuar?`
+        ? `Esta tarjeta cuesta ${mxn(costo)}. El pago es por transferencia: después de solicitarla, sube aquí tu comprobante para que el comité la apruebe. ¿Continuar?`
         : "Esta tarjeta está incluida para tu casa (sin costo). ¿Solicitar?";
     if (!confirm(texto)) return;
     conBusy("solicitar", true);
@@ -247,14 +236,13 @@ export default function CredencialesPage() {
       p_vehicle_id: tipo === "vehicular" ? vehId : null,
       p_beneficiario: tipo === "peatonal" ? benefId : null,
       p_beneficiario_nombre: tipo === "visita" ? visitaNombre.trim() : null,
-      p_personalizada: esPers,
+      p_personalizada: tipo === "vehicular",
     });
     conBusy("solicitar", false);
     if (!res.ok) return setMsg(res.error);
     setVehId("");
     setBenefId("");
     setVisitaNombre("");
-    setPersonalizada(false);
     await recargar();
   }
 
@@ -371,8 +359,9 @@ export default function CredencialesPage() {
           Tu casa tiene <b>1 tarjeta vehicular incluida</b>.{" "}
           {precio > 0 ? (
             <>
-              Las adicionales cuestan <b>{mxn(precio)}</b>, pagadas por transferencia (subes tu
-              comprobante aquí mismo — no se carga a tu saldo de mantenimiento).
+              Las adicionales cuestan <b>{mxn(precio)}</b> (personalizada incluida), pagadas por
+              transferencia — subes tu comprobante aquí mismo, no se carga a tu saldo de
+              mantenimiento.
             </>
           ) : (
             <>El comité aún no define el precio de las adicionales.</>
@@ -418,19 +407,11 @@ export default function CredencialesPage() {
               {vehSinTarjeta.length === 0 && (
                 <p className="text-xs text-slate-400 mt-1">Todos tus vehículos aprobados ya tienen tarjeta o solicitud.</p>
               )}
-              {precioPers > 0 && vehSinTarjeta.length > 0 && (
-                <label className="flex items-start gap-2 mt-2.5 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={personalizada}
-                    onChange={(e) => setPersonalizada(e.target.checked)}
-                    className="mt-0.5 accent-brand-500"
-                  />
-                  <span className="text-slate-600">
-                    <b>🎨 Personalizada (+{mxn(precioPers)})</b> — impresa a color con el diseño de
-                    la colonia y los datos de tu vehículo (marca, modelo, placas y casa) al reverso.
-                  </span>
-                </label>
+              {vehSinTarjeta.length > 0 && (
+                <p className="text-xs text-slate-500 mt-2">
+                  🎨 Todas las tarjetas vehiculares vienen <b>personalizadas</b>: diseño de la villa
+                  al frente y los datos de tu vehículo (marca, modelo, placas y casa) al reverso.
+                </p>
               )}
             </div>
 
@@ -497,9 +478,9 @@ export default function CredencialesPage() {
                         {s.personalizada && <span className="ml-1">🎨</span>}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {s.es_incluida && !s.personalizada
+                        {Number(s.costo ?? s.costo_estimado) === 0
                           ? "Incluida (sin costo)"
-                          : `${s.es_incluida ? "Incluida + personalización" : "Adicional"} · ${mxn(s.costo ?? s.costo_estimado)}`}
+                          : `Adicional · ${mxn(s.costo ?? s.costo_estimado)}`}
                       </p>
                       <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO[s.estado]?.cls ?? "bg-slate-100 text-slate-500"}`}>
                         {ESTADO[s.estado]?.label ?? s.estado}
@@ -595,20 +576,10 @@ export default function CredencialesPage() {
                     className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                   />
                 </label>
-                <label className="text-xs text-slate-500">
-                  Personalización 🎨 ($)
-                  <input
-                    type="number"
-                    min={0}
-                    defaultValue={colonia.precio_personalizacion}
-                    onBlur={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (v !== colonia.precio_personalizacion) guardarConfig("precio_personalizacion", v);
-                    }}
-                    className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
-                  />
-                </label>
               </div>
+              <p className="text-xs text-slate-400 mt-2">
+                El precio incluye la personalización (diseño de la villa + datos del vehículo).
+              </p>
               {colonia.precio_tarjeta_adicional === 0 && (
                 <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2 ring-1 ring-amber-200 mt-2">
                   ⚠️ Precio en $0: las tarjetas adicionales se aprobarán sin cargo hasta que definas el precio.
@@ -637,9 +608,9 @@ export default function CredencialesPage() {
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {s.costo_estimado > 0
-                            ? `${s.es_incluida ? "Incluida + personalización" : "Adicional"} — ${mxn(s.costo_estimado)}`
+                            ? `Adicional — ${mxn(s.costo_estimado)}`
                             : "Incluida — sin costo"}
-                          {s.personalizada ? " · impresión personalizada" : ""}
+                          {s.personalizada ? " · personalizada" : ""}
                         </p>
                         {s.pago_estado !== "no_requerido" && (
                           <p className="mt-1">

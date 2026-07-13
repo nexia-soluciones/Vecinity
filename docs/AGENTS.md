@@ -1102,3 +1102,10 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (junto con el panel RFID de la migr. 060 que
     sigue sin salir — el deploy de las 14:00 quedó con el build del 12-jul) y plantilla
     personalizada en el print-bridge.
+- **[2026-07-13] Personalización estándar de tarjetas (migr. `062` ✅ aplicada, QA 4/4)**:
+  decisión del comité — TODA tarjeta vehicular sale personalizada (diseño villa + datos del
+  carro al reverso); adicional subió a $150 con personalización incluida (Juan lo cambió en
+  la UI); `precio_personalizacion` → 0 (columna se conserva); `solicitar_tarjeta` fuerza
+  `personalizada=true` en vehiculares; UI sin checkbox. Solicitudes vivas actualizadas:
+  25 incluidas $0 + 21 vehiculares $150 + 4 visitas $150 = $3,750 por cobrar.
+  Comunicado a vecinos vía módulo comunicados (RPC `crear_comunicado` con Telegram).
