@@ -1059,3 +1059,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
     caché del navegador a Supabase Storage) — que la galería esté vacía es normal.
   - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (acumulado con el pendiente anterior) y
     probar en la tablet real del guardia.
+- **[2026-07-13] Panel comité de acceso RFID: override por casa + umbral editable + semáforo Orin**
+  (migr. `060_rfid_panel_comite.sql` ✅ aplicada en BD · QA 19/19 con ROLLBACK · build ✓):
+  - `houses.rfid_override` por casa: `auto` / `forzar_activo` (exenta de mora) /
+    `forzar_suspendido` (motivo obligatorio) — `rfid_reconcile_plan` lo respeta (los
+    forzados ganan a la regla de saldo) y emite `motivo` mora|manual; `rfid_mark` nuevo
+    de 4 args (el de 3 se DROPeó — sobrecarga ambigua PostgREST).
+  - Umbral de suspensión editable por colonia (`rfid_set_umbral`, antes fijo $2,400) y
+    bitácora `rfid_panel_log` (quién/qué/motivo, últimos 20 en el panel).
+  - Heartbeat de la Orin: poller llama `rfid_heartbeat` cada vuelta → semáforo
+    "caseta en línea / sin señal" (umbral 25 min) en el card nuevo de
+    `/dashboard/comite` (`AccesoRfid.tsx`, todo vía RPC `rfid_panel_data` gate is_admin).
+  - Convención de signo confirmada con datos: en `houses.saldo` NEGATIVO = deuda
+    (la regla RFID usa `saldo <= -umbral`); el card marca EN MORA con la misma regla
+    del RPC para no divergir.
+  - ⏳ PENDIENTE DE JUAN: (1) autorizar Tailscale para copiar `poller.py` parchado a la
+    Orin + `sudo systemctl restart access-bridge` (hasta entonces no hay heartbeat y los
+    Telegram no etiquetan "por decisión del comité"; el resto ya funciona), (2) deploy
+    EasyPanel del frontend.

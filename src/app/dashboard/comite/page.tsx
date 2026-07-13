@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
+import AccesoRfid from "./AccesoRfid";
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
@@ -626,6 +627,9 @@ export default function PanelComite() {
             </ul>
           )}
         </section>
+
+        {/* Acceso RFID de la caseta */}
+        <AccesoRfid />
 
         {/* Top morosos */}
         <section className="mt-6 mb-4">
