@@ -1077,3 +1077,28 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
     Orin + `sudo systemctl restart access-bridge` (hasta entonces no hay heartbeat y los
     Telegram no etiquetan "por decisión del comité"; el resto ya funciona), (2) deploy
     EasyPanel del frontend.
+- **[2026-07-13] Cobro real de tarjetas de acceso + personalizada + pago separado del mantenimiento**
+  (migr. `061_tarjetas_cobro.sql` ✅ aplicada · QA 14/14 con ROLLBACK · build ✓):
+  - **Bug raíz corregido**: `solicitar_tarjeta` nunca marcaba `es_incluida` en el INSERT →
+    `cotizar_tarjeta` siempre veía libre la incluida → TODAS las tarjetas cotizaban $0 y
+    nadie veía el aviso de costo (así casa 128 pidió 2 sin costo). Ahora la incluida se
+    reclama AL SOLICITAR (serializado por FOR UPDATE de la casa).
+  - **Personalizada 🎨 (+$50, `colonias.precio_personalizacion`)**: solo vehiculares;
+    frente a color + datos del carro al reverso. El payload del print job lleva
+    `personalizada: true|false`. ⏳ El print-bridge debe respetar la bandera
+    (blanca = sin impresión de diseño).
+  - **Pago por transferencia SEPARADO del saldo** (sin opción de efectivo — decisión Juan):
+    `resolver_solicitud_tarjeta` YA NO carga a transactions/saldo; ciclo
+    `pago_estado`: pendiente → en_revision (vecino sube comprobante a
+    `vecino-comprobantes/tarjetas/` vía `subir_comprobante_tarjeta`) → aprobado/rechazado
+    (`validar_pago_tarjeta`, comité, nota obligatoria al rechazar). Guard: no se
+    aprueba/imprime sin pago validado.
+  - **Retro-fix campaña**: de las 51 solicitadas, la vehicular más antigua de cada casa
+    quedó como incluida $0 (25 casas) y 26 quedaron adicionales $100 con pago pendiente
+    ($2,600 por cobrar). ⚠️ Avisar a los vecinos (comunicado/Caty) antes de exigir el pago.
+  - UI credenciales: checkbox personalizada con desglose, badges de pago, subir
+    comprobante en la card, comité valida pago ("Pago recibido ✓" / rechazar con motivo),
+    botón aprobar bloqueado hasta pago validado, input de precio de personalización.
+  - ⏳ PENDIENTE DE JUAN: deploy EasyPanel (junto con el panel RFID de la migr. 060 que
+    sigue sin salir — el deploy de las 14:00 quedó con el build del 12-jul) y plantilla
+    personalizada en el print-bridge.

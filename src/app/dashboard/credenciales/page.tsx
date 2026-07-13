@@ -19,8 +19,12 @@ type Solicitud = {
   tipo: "vehicular" | "peatonal" | "visita";
   estado: string;
   es_incluida: boolean;
+  personalizada: boolean;
   costo: number | null;
   costo_estimado: number;
+  pago_estado: "no_requerido" | "pendiente" | "en_revision" | "aprobado" | "rechazado";
+  comprobante_url: string | null;
+  pago_motivo_rechazo: string | null;
   motivo_rechazo: string | null;
   created_at: string;
   vehicle: { placa: string } | null;
@@ -36,7 +40,11 @@ type Job = {
   created_at: string;
   payload: { placa?: string; nombre?: string; casa?: string };
 };
-type Colonia = { stock_tarjetas: number; precio_tarjeta_adicional: number };
+type Colonia = {
+  stock_tarjetas: number;
+  precio_tarjeta_adicional: number;
+  precio_personalizacion: number;
+};
 
 const ESTADO: Record<string, { label: string; cls: string }> = {
   solicitada: { label: "En revisión", cls: "bg-amber-50 text-amber-700" },
@@ -47,7 +55,8 @@ const ESTADO: Record<string, { label: string; cls: string }> = {
   cancelada: { label: "Cancelada", cls: "bg-slate-100 text-slate-400" },
 };
 
-const SOL_COLS = `id, tipo, estado, es_incluida, costo, costo_estimado, motivo_rechazo, created_at,
+const SOL_COLS = `id, tipo, estado, es_incluida, personalizada, costo, costo_estimado,
+  pago_estado, comprobante_url, pago_motivo_rechazo, motivo_rechazo, created_at,
   beneficiario_nombre,
   vehicle:vehicles(placa),
   beneficiario:profiles!card_requests_beneficiario_profile_id_fkey(nombre)`;
@@ -63,6 +72,15 @@ const titular = (s: Solicitud) =>
 const mxn = (n: number | null | undefined) =>
   `$${Number(n ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 0 })}`;
 
+const PAGO: Record<string, { label: string; cls: string }> = {
+  pendiente: { label: "Pago pendiente", cls: "bg-amber-50 text-amber-700" },
+  en_revision: { label: "Comprobante en revisión", cls: "bg-sky-50 text-sky-700" },
+  aprobado: { label: "Pagada", cls: "bg-emerald-50 text-emerald-700" },
+  rechazado: { label: "Pago rechazado", cls: "bg-red-50 text-red-600" },
+};
+
+const BUCKET_COMPROBANTES = "vecino-comprobantes";
+
 export default function CredencialesPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -73,6 +91,8 @@ export default function CredencialesPage() {
 
   // Vecino
   const [precio, setPrecio] = useState(0);
+  const [precioPers, setPrecioPers] = useState(0);
+  const [personalizada, setPersonalizada] = useState(false);
   const [incluidaLibre, setIncluidaLibre] = useState(false);
   const [vehiculos, setVehiculos] = useState<Veh[]>([]);
   const [miembros, setMiembros] = useState<Miembro[]>([]);
@@ -98,9 +118,11 @@ export default function CredencialesPage() {
 
   const cargarVecino = useCallback(async (hid: string) => {
     const [cot, vehs, membs, sols] = await Promise.all([
-      callRpc<{ precio_adicional: number; incluida_disponible: boolean }>("cotizar_tarjeta", {
-        p_tipo: "vehicular",
-      }),
+      callRpc<{
+        precio_adicional: number;
+        precio_personalizacion: number;
+        incluida_disponible: boolean;
+      }>("cotizar_tarjeta", { p_tipo: "vehicular" }),
       supabaseBrowser
         .from("vehicles")
         .select("id, placa, brand:vehicle_brands(nombre)")
@@ -122,6 +144,7 @@ export default function CredencialesPage() {
     ]);
     if (cot.ok) {
       setPrecio(Number(cot.data.precio_adicional ?? 0));
+      setPrecioPers(Number(cot.data.precio_personalizacion ?? 0));
       setIncluidaLibre(!!cot.data.incluida_disponible);
     }
     setVehiculos((vehs.data as unknown as Veh[]) ?? []);
@@ -133,7 +156,7 @@ export default function CredencialesPage() {
     const [col, pend, entr, jbs] = await Promise.all([
       supabaseBrowser
         .from("colonias")
-        .select("stock_tarjetas, precio_tarjeta_adicional")
+        .select("stock_tarjetas, precio_tarjeta_adicional, precio_personalizacion")
         .eq("id", cid)
         .maybeSingle(),
       supabaseBrowser
@@ -201,13 +224,21 @@ export default function CredencialesPage() {
 
   async function solicitar(tipo: "vehicular" | "peatonal" | "visita") {
     setMsg(null);
-    const costo = tipo === "vehicular" && incluidaLibre ? 0 : precio;
+    const esPers = tipo === "vehicular" && personalizada;
+    const base = tipo === "vehicular" && incluidaLibre ? 0 : precio;
+    const costo = base + (esPers ? precioPers : 0);
     if (tipo === "vehicular" && !vehId) return setMsg("Elige el vehículo.");
     if (tipo === "peatonal" && !benefId) return setMsg("Elige para quién es.");
     if (tipo === "visita" && !visitaNombre.trim()) return setMsg("Escribe el nombre de la visita.");
+    const desglose =
+      base > 0 && esPers
+        ? ` (adicional ${mxn(base)} + personalización ${mxn(precioPers)})`
+        : esPers
+          ? " (tarjeta incluida + personalización)"
+          : "";
     const texto =
       costo > 0
-        ? `Esta tarjeta es ADICIONAL: se cargarán ${mxn(costo)} al saldo de tu casa al aprobarse. ¿Continuar?`
+        ? `Esta tarjeta cuesta ${mxn(costo)}${desglose}. El pago es por transferencia: después de solicitarla, sube aquí tu comprobante para que el comité la apruebe. ¿Continuar?`
         : "Esta tarjeta está incluida para tu casa (sin costo). ¿Solicitar?";
     if (!confirm(texto)) return;
     conBusy("solicitar", true);
@@ -216,12 +247,53 @@ export default function CredencialesPage() {
       p_vehicle_id: tipo === "vehicular" ? vehId : null,
       p_beneficiario: tipo === "peatonal" ? benefId : null,
       p_beneficiario_nombre: tipo === "visita" ? visitaNombre.trim() : null,
+      p_personalizada: esPers,
     });
     conBusy("solicitar", false);
     if (!res.ok) return setMsg(res.error);
     setVehId("");
     setBenefId("");
     setVisitaNombre("");
+    setPersonalizada(false);
+    await recargar();
+  }
+
+  async function subirComprobante(s: Solicitud, file: File | null) {
+    if (!file || busy.has(s.id) || !houseId) return;
+    setMsg(null);
+    conBusy(s.id, true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `tarjetas/${houseId}/${s.id}-${Date.now()}.${ext}`;
+      const up = await supabaseBrowser.storage.from(BUCKET_COMPROBANTES).upload(path, file);
+      if (up.error) return setMsg("No se pudo subir el comprobante. Inténtalo de nuevo.");
+      const url = supabaseBrowser.storage.from(BUCKET_COMPROBANTES).getPublicUrl(path).data.publicUrl;
+      const res = await callRpc("subir_comprobante_tarjeta", { p_id: s.id, p_url: url });
+      if (!res.ok) return setMsg(res.error);
+      await recargar();
+    } finally {
+      conBusy(s.id, false);
+    }
+  }
+
+  async function validarPago(s: Solicitud, aprobar: boolean) {
+    if (busy.has(s.id)) return;
+    setMsg(null);
+    let nota: string | null = null;
+    if (!aprobar) {
+      nota = prompt("Motivo del rechazo del pago (lo verá el vecino):");
+      if (!nota?.trim()) return;
+    } else if (!confirm(`¿Confirmar que el pago de ${mxn(s.costo_estimado)} ya está en la cuenta?`)) {
+      return;
+    }
+    conBusy(s.id, true);
+    const res = await callRpc("validar_pago_tarjeta", {
+      p_id: s.id,
+      p_aprobar: aprobar,
+      p_nota: nota,
+    });
+    conBusy(s.id, false);
+    if (!res.ok) return setMsg(res.error);
     await recargar();
   }
 
@@ -266,7 +338,10 @@ export default function CredencialesPage() {
     await recargar();
   }
 
-  async function guardarConfig(campo: "precio_tarjeta_adicional" | "stock_tarjetas", valor: number) {
+  async function guardarConfig(
+    campo: "precio_tarjeta_adicional" | "stock_tarjetas" | "precio_personalizacion",
+    valor: number
+  ) {
     if (!coloniaId || Number.isNaN(valor) || valor < 0) return;
     const res = await runOrError(() =>
       supabaseBrowser.from("colonias").update({ [campo]: valor }).eq("id", coloniaId)
@@ -295,7 +370,10 @@ export default function CredencialesPage() {
         <p className="text-sm text-slate-500">
           Tu casa tiene <b>1 tarjeta vehicular incluida</b>.{" "}
           {precio > 0 ? (
-            <>Las adicionales cuestan <b>{mxn(precio)}</b> (se cargan al saldo).</>
+            <>
+              Las adicionales cuestan <b>{mxn(precio)}</b>, pagadas por transferencia (subes tu
+              comprobante aquí mismo — no se carga a tu saldo de mantenimiento).
+            </>
           ) : (
             <>El comité aún no define el precio de las adicionales.</>
           )}
@@ -339,6 +417,20 @@ export default function CredencialesPage() {
               </div>
               {vehSinTarjeta.length === 0 && (
                 <p className="text-xs text-slate-400 mt-1">Todos tus vehículos aprobados ya tienen tarjeta o solicitud.</p>
+              )}
+              {precioPers > 0 && vehSinTarjeta.length > 0 && (
+                <label className="flex items-start gap-2 mt-2.5 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={personalizada}
+                    onChange={(e) => setPersonalizada(e.target.checked)}
+                    className="mt-0.5 accent-brand-500"
+                  />
+                  <span className="text-slate-600">
+                    <b>🎨 Personalizada (+{mxn(precioPers)})</b> — impresa a color con el diseño de
+                    la colonia y los datos de tu vehículo (marca, modelo, placas y casa) al reverso.
+                  </span>
+                </label>
               )}
             </div>
 
@@ -397,29 +489,61 @@ export default function CredencialesPage() {
           ) : (
             <ul className="flex flex-col gap-2">
               {solVivas.map((s) => (
-                <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">
-                      {TIPO_EMOJI[s.tipo]} {titular(s)}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {s.es_incluida || (s.estado === "solicitada" && s.costo_estimado === 0)
-                        ? "Incluida (sin costo)"
-                        : `Adicional · ${mxn(s.costo ?? s.costo_estimado)}`}
-                    </p>
-                    <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO[s.estado]?.cls ?? "bg-slate-100 text-slate-500"}`}>
-                      {ESTADO[s.estado]?.label ?? s.estado}
-                    </span>
+                <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">
+                        {TIPO_EMOJI[s.tipo]} {titular(s)}
+                        {s.personalizada && <span className="ml-1">🎨</span>}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {s.es_incluida && !s.personalizada
+                          ? "Incluida (sin costo)"
+                          : `${s.es_incluida ? "Incluida + personalización" : "Adicional"} · ${mxn(s.costo ?? s.costo_estimado)}`}
+                      </p>
+                      <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO[s.estado]?.cls ?? "bg-slate-100 text-slate-500"}`}>
+                        {ESTADO[s.estado]?.label ?? s.estado}
+                      </span>
+                      {s.pago_estado !== "no_requerido" && (
+                        <span className={`inline-block mt-1 ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAGO[s.pago_estado]?.cls ?? "bg-slate-100 text-slate-500"}`}>
+                          {PAGO[s.pago_estado]?.label ?? s.pago_estado}
+                        </span>
+                      )}
+                    </div>
+                    {s.estado === "solicitada" && (
+                      <button
+                        onClick={() => cancelar(s.id)}
+                        disabled={busy.has(s.id)}
+                        className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
+                      >
+                        Cancelar
+                      </button>
+                    )}
                   </div>
-                  {s.estado === "solicitada" && (
-                    <button
-                      onClick={() => cancelar(s.id)}
-                      disabled={busy.has(s.id)}
-                      className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
-                    >
-                      Cancelar
-                    </button>
-                  )}
+                  {s.estado === "solicitada" &&
+                    (s.pago_estado === "pendiente" || s.pago_estado === "rechazado") && (
+                      <div className="mt-2 border-t border-slate-100 pt-2">
+                        {s.pago_estado === "rechazado" && s.pago_motivo_rechazo && (
+                          <p className="text-xs text-red-600 mb-1.5">
+                            El comité rechazó tu comprobante: “{s.pago_motivo_rechazo}”. Sube uno nuevo.
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500 mb-1.5">
+                          Transfiere {mxn(s.costo_estimado)} a la cuenta de la colonia (la misma del
+                          mantenimiento) y sube tu comprobante:
+                        </p>
+                        <label className="inline-block rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-2 hover:bg-brand-600 cursor-pointer">
+                          {busy.has(s.id) ? "Subiendo…" : "📎 Subir comprobante"}
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            disabled={busy.has(s.id)}
+                            onChange={(e) => subirComprobante(s, e.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                      </div>
+                    )}
                 </li>
               ))}
             </ul>
@@ -471,6 +595,19 @@ export default function CredencialesPage() {
                     className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
                   />
                 </label>
+                <label className="text-xs text-slate-500">
+                  Personalización 🎨 ($)
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={colonia.precio_personalizacion}
+                    onBlur={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (v !== colonia.precio_personalizacion) guardarConfig("precio_personalizacion", v);
+                    }}
+                    className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+                  />
+                </label>
               </div>
               {colonia.precio_tarjeta_adicional === 0 && (
                 <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2 ring-1 ring-amber-200 mt-2">
@@ -489,33 +626,77 @@ export default function CredencialesPage() {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {pendientes.map((s) => (
-                    <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
-                      <p className="font-semibold text-slate-800">
-                        {TIPO_EMOJI[s.tipo]} {titular(s)} · Casa {s.house?.numero}
-                        {s.tipo === "visita" && <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">visita frecuente</span>}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {s.costo_estimado > 0 ? `Adicional — se cobrará ${mxn(s.costo_estimado)}` : "Incluida — sin costo"}
-                      </p>
-                      <div className="flex gap-2 mt-2.5">
-                        <button
-                          onClick={() => resolver(s, "aprobar")}
-                          disabled={busy.has(s.id)}
-                          className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
-                        >
-                          {busy.has(s.id) ? "…" : "Aprobar e imprimir"}
-                        </button>
-                        <button
-                          onClick={() => resolver(s, "rechazar")}
-                          disabled={busy.has(s.id)}
-                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
-                        >
-                          Rechazar
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                  {pendientes.map((s) => {
+                    const pagoListo = s.pago_estado === "no_requerido" || s.pago_estado === "aprobado";
+                    return (
+                      <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                        <p className="font-semibold text-slate-800">
+                          {TIPO_EMOJI[s.tipo]} {titular(s)} · Casa {s.house?.numero}
+                          {s.personalizada && <span className="ml-1">🎨</span>}
+                          {s.tipo === "visita" && <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">visita frecuente</span>}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {s.costo_estimado > 0
+                            ? `${s.es_incluida ? "Incluida + personalización" : "Adicional"} — ${mxn(s.costo_estimado)}`
+                            : "Incluida — sin costo"}
+                          {s.personalizada ? " · impresión personalizada" : ""}
+                        </p>
+                        {s.pago_estado !== "no_requerido" && (
+                          <p className="mt-1">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAGO[s.pago_estado]?.cls}`}>
+                              {PAGO[s.pago_estado]?.label}
+                            </span>
+                            {s.comprobante_url && (
+                              <a
+                                href={s.comprobante_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="ml-2 text-xs font-semibold text-brand-600 underline underline-offset-2"
+                              >
+                                Ver comprobante
+                              </a>
+                            )}
+                          </p>
+                        )}
+                        {s.pago_estado === "en_revision" ? (
+                          <div className="flex gap-2 mt-2.5">
+                            <button
+                              onClick={() => validarPago(s, true)}
+                              disabled={busy.has(s.id)}
+                              className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
+                            >
+                              {busy.has(s.id) ? "…" : "Pago recibido ✓"}
+                            </button>
+                            <button
+                              onClick={() => validarPago(s, false)}
+                              disabled={busy.has(s.id)}
+                              className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                            >
+                              Rechazar pago
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 mt-2.5">
+                            <button
+                              onClick={() => resolver(s, "aprobar")}
+                              disabled={busy.has(s.id) || !pagoListo}
+                              title={pagoListo ? "" : "Falta que el vecino pague y el comité valide el comprobante"}
+                              className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                            >
+                              {busy.has(s.id) ? "…" : pagoListo ? "Aprobar e imprimir" : "Esperando pago del vecino"}
+                            </button>
+                            <button
+                              onClick={() => resolver(s, "rechazar")}
+                              disabled={busy.has(s.id)}
+                              className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
