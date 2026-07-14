@@ -2,10 +2,28 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-06
+> Última actualización: 2026-07-13
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Baja de vehículos por el comité (2026-07-13) ✅
+
+El comité no podía remover vehículos de otras casas: `eliminar_vehiculo` (migr. 011) solo permite al
+dueño borrar los NO aprobados y su mensaje decía "pide al comité darlo de baja"… camino que no existía.
+
+- **Migr. 064** — RPC `vecino.baja_vehiculo_comite(p_id)`: guard `is_admin()`, DELETE definitivo de
+  cualquier vehículo (cualquier casa/estado). Defensivo: si hubiera `rfid_tags` activos ligados al
+  vehículo (hoy 0 en prod; FK es ON DELETE SET NULL) devuelve `aviso_rfid` para revisar el panel de
+  acceso. Aplicada en prod + `NOTIFY pgrst`.
+- **UI** `/dashboard/vehiculos` — sección solo-comité "Vehículos por casa": busca por número de casa
+  (exacto, join `houses!inner`) o placa (ilike), dedup, botón "Dar de baja" con `window.confirm` →
+  RPC → muestra placa/casa dado de baja y el aviso RFID si aplica.
+- **QA en prod con BEGIN/ROLLBACK** (identidad simulada vía `request.jwt.claims`): vecino normal
+  rechazado ✅ · vehículo intacto tras rechazo ✅ · admin borra aprobado de otra casa ✅ · id
+  inexistente da error legible ✅. `npm run build` ✅.
+- Nota RLS: la búsqueda funciona porque `vehicles_read` permite SELECT a toda la colonia (migr. 002);
+  la baja queda protegida en el RPC, no en el cliente.
 
 ## Recuperación de contraseña — email + Caty (2026-07-06)
 

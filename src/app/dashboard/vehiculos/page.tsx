@@ -46,6 +46,13 @@ export default function VehiculosPage() {
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
 
+  // Comité: búsqueda y baja de vehículos de cualquier casa
+  const [busqueda, setBusqueda] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [resultados, setResultados] = useState<Pendiente[] | null>(null);
+  const [bajaMsg, setBajaMsg] = useState<string | null>(null);
+  const [bajaErr, setBajaErr] = useState<string | null>(null);
+
   const cargarMios = useCallback(async (hid: string) => {
     const { data } = await supabaseBrowser
       .from("vehicles")
@@ -143,6 +150,61 @@ export default function VehiculosPage() {
       return n;
     });
     if (!res.ok) return setPendErr(res.error);
+    if (houseId) await cargarMios(houseId);
+  }
+
+  async function buscar() {
+    const q = busqueda.trim();
+    setBajaMsg(null);
+    setBajaErr(null);
+    if (!q) return setResultados(null);
+    setBuscando(true);
+    const porCasa = supabaseBrowser
+      .from("vehicles")
+      .select(`${VEH_COLS}, house:houses!inner(numero)`)
+      .eq("house.numero", q)
+      .order("created_at");
+    const porPlaca = supabaseBrowser
+      .from("vehicles")
+      .select(`${VEH_COLS}, house:houses(numero)`)
+      .ilike("placa", `%${q}%`)
+      .order("created_at");
+    const [rc, rp] = await Promise.all([porCasa, porPlaca]);
+    setBuscando(false);
+    if (rc.error && rp.error) return setBajaErr("No se pudo buscar. Inténtalo de nuevo.");
+    const vistos = new Set<string>();
+    const lista = [
+      ...((rc.data as unknown as Pendiente[]) ?? []),
+      ...((rp.data as unknown as Pendiente[]) ?? []),
+    ].filter((v) => (vistos.has(v.id) ? false : (vistos.add(v.id), true)));
+    setResultados(lista);
+  }
+
+  async function darDeBaja(v: Pendiente) {
+    if (resolviendo.has(v.id)) return;
+    const ok = window.confirm(
+      `¿Dar de baja el vehículo ${v.placa} de la casa ${v.house?.numero ?? "?"}? Esta acción es definitiva.`
+    );
+    if (!ok) return;
+    setBajaMsg(null);
+    setBajaErr(null);
+    setResolviendo((s) => new Set(s).add(v.id));
+    const res = await callRpc<{ ok: boolean; placa: string; casa: string; aviso_rfid: string | null }>(
+      "baja_vehiculo_comite",
+      { p_id: v.id }
+    );
+    setResolviendo((s) => {
+      const n = new Set(s);
+      n.delete(v.id);
+      return n;
+    });
+    if (!res.ok) return setBajaErr(res.error);
+    setResultados((l) => (l ? l.filter((x) => x.id !== v.id) : l));
+    setPendientes((l) => l.filter((x) => x.id !== v.id));
+    setBajaMsg(
+      `Vehículo ${res.data.placa} (casa ${res.data.casa}) dado de baja.` +
+        (res.data.aviso_rfid ? ` ⚠️ ${res.data.aviso_rfid}` : "")
+    );
     if (houseId) await cargarMios(houseId);
   }
 
@@ -334,6 +396,83 @@ export default function VehiculosPage() {
                 ))}
               </ul>
             )}
+          </section>
+        )}
+
+        {/* Comité: baja de vehículos de cualquier casa */}
+        {isAdmin && (
+          <section className="mt-8">
+            <h2 className="text-sm font-bold text-slate-700 mb-2">Vehículos por casa</h2>
+            <p className="text-xs text-slate-500 mb-2">
+              Busca por número de casa o placa para dar de baja vehículos registrados.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && buscar()}
+                placeholder="Casa (ej. 101) o placa"
+                className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300"
+              />
+              <button
+                onClick={buscar}
+                disabled={buscando}
+                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
+              >
+                {buscando ? "…" : "Buscar"}
+              </button>
+            </div>
+            {bajaErr && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200 mt-2">
+                {bajaErr}
+              </p>
+            )}
+            {bajaMsg && (
+              <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2 ring-1 ring-emerald-200 mt-2">
+                {bajaMsg}
+              </p>
+            )}
+            {resultados !== null &&
+              (resultados.length === 0 ? (
+                <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100 mt-2">
+                  Sin vehículos para esa casa o placa.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2 mt-2">
+                  {resultados.map((v) => (
+                    <li
+                      key={v.id}
+                      className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">
+                          {v.placa} · Casa {v.house?.numero ?? "?"}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {[v.brand?.nombre, v.model?.nombre].filter(Boolean).join(" ") ||
+                            "Sin marca/modelo"}
+                          {v.color ? ` · ${v.color}` : ""}
+                        </p>
+                        <span
+                          className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            ESTADO[v.estado] ?? "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {v.estado}
+                          {v.tarjeta_rfid ? " · RFID" : ""}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => darDeBaja(v)}
+                        disabled={resolviendo.has(v.id)}
+                        className="rounded-xl border border-red-200 text-red-600 text-xs font-semibold px-3 py-2 hover:bg-red-50 disabled:opacity-40 shrink-0"
+                      >
+                        {resolviendo.has(v.id) ? "…" : "Dar de baja"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ))}
           </section>
         )}
       </div>
