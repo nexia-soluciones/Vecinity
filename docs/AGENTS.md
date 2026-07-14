@@ -1132,4 +1132,7 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   existente es aris_abonce@hotmail.com (aprobada, un solo login 30-jun); invitación CAT-130
   restaurada (accepted_at=NULL, vence 22-ago) para que pueda registrarse de nuevo. La cuenta
   vieja se dejó activa por si es de un familiar — revisar/desactivar si queda huérfana.
+  Casa 145 (2026-07-13, mismo caso): había cuenta existente (aprobada, un solo login 30-jun;
+  correo en BD); invitación CAT-145 restaurada (accepted_at=NULL, vence 22-ago).
+  Cuenta vieja activa — revisar si queda huérfana tras el nuevo registro.
   ⏳ Deploy EasyPanel pendiente con 909bece+c74444c (UI tarjetas).
