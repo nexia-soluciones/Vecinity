@@ -1233,3 +1233,20 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   `LIMIT 1` que era una vecina real (se restauró de inmediato) — SIEMPRE resolver el id
   por EMAIL antes de mutar un perfil.
 - ⏳ Deploy EasyPanel pendiente (build ✓): auto-ocultado de CamaraPuerta por colonia.
+
+### Adenda 2026-07-15 (4) — Villa Aurora (DEMO) para ventas + Manual del Vendedor ✅
+- **Villa ficticia** `Villa Aurora (DEMO)` (slug `villa-aurora-demo`, colonia
+  `2a7c0627-f498-4745-9a84-438c13a969fd`) sembrada en prod con `scripts/seed_villa_demo.sql`
+  (idempotente): 10 casas (D-01..D-10, saldos variados: D-03 morosa $3,200 > umbral $2,400,
+  D-04 a favor), historial de movimientos, abono pendiente (D-02), solicitud de vecino
+  pendiente (Sofía), 2 áreas (Alberca auto / Terraza $500+$500), 2 comunicados, invitación
+  libre `AURORA-08`. Aislada por RLS; SIN dispositivo físico (069 impide ver/abrir la puerta
+  real de Catania). Cuentas: vecino.demo@ / comite.demo@ / guardia.demo@ / solicitud.demo@
+  `@vecinity.app` (metadata app='interno'; creds en MANUAL_VENDEDOR — solo datos ficticios).
+  Smoke E2E en PROD: las 3 sesiones entran y ven Villa Aurora ✓.
+- **MANUAL_VENDEDOR.md**: pitch por dolor (cobranza/seguridad/transparencia), guion de demo
+  15 min en 3 actos (vecino→comité→caseta) con reseteo, paquete software+hardware con el
+  socio instalador (tabla de quién pone qué), objeciones, qué NO prometer (sin pasarela,
+  PWA no stores, no CCTV), checklist de levantamiento y cierre. Índice actualizado.
+- Gotchas seed: `houses.estatus` es enum (`al_corriente|con_adeudo|en_convenio`);
+  `comunicados.autor` CHECK solo `comite|caty`.

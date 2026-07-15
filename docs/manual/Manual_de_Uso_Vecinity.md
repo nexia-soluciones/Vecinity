@@ -11,6 +11,7 @@ cada quien tenga solo lo que necesita:
 | 🏠 **[Manual del Vecino](MANUAL_VECINO.md)** | Todos los residentes y propietarios | Registro, estado de cuenta, pagos, reservas, visitas con QR, **cámara y apertura de la puerta peatonal**, rostro para la puerta, vehículos, incidencias, SOS, comunicados y Caty (Telegram) |
 | 🗂 **[Manual del Administrador](MANUAL_ADMINISTRADOR.md)** | Comité y administración | Panel del comité, aprobaciones, cobros y convenios, finanzas (gastos, conciliación bancaria, auditoría, proyectos, reporte de multas IA), multas, comunicados, áreas comunes, credenciales PVC y **todo el acceso de la caseta** (RFID, rostros, cámara y bitácora) |
 | 🛡 **[Manual del Vigilante](MANUAL_VIGILANTE.md)** | Guardias de la caseta | Turno, SOS, escaneo de pases QR, **cámara y apertura de la puerta peatonal**, registro de visitas con INE/placas (lectura de placa con IA), reservas y llaves, servicios, proveedores, paquetes e historial |
+| 💼 **[Manual del Vendedor](MANUAL_VENDEDOR.md)** | Equipo comercial y socio instalador | Pitch, **villa de demostración (Villa Aurora)** con cuentas y guion de 15 min, paquete hardware + software, objeciones, qué no prometer y proceso de cierre |
 
 ---
 
