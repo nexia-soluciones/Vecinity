@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { generarReciboAbono } from "../recibo-actions";
 import { VerResolucionButton } from "../_components/VerResolucionButton";
+import AccesoPeatonal from "./AccesoPeatonal";
 
 type Mov = {
   id: string;
@@ -32,6 +33,7 @@ export default function MiCuentaPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [casa, setCasa] = useState<Casa | null>(null);
+  const [houseId, setHouseId] = useState<string | null>(null);
   const [movs, setMovs] = useState<Mov[]>([]);
   const [detErr, setDetErr] = useState<string | null>(null);
   const [recibo, setRecibo] = useState<string | null>(null); // id del abono generando
@@ -69,6 +71,7 @@ export default function MiCuentaPage() {
         .eq("house_id", p.house_id)
         .order("created_at", { ascending: true });
       setCasa((h as unknown as Casa) ?? null);
+      setHouseId(p.house_id);
       setMovs((t as unknown as Mov[]) ?? []);
       setReady(true);
     })();
@@ -212,6 +215,8 @@ export default function MiCuentaPage() {
             </ul>
           )}
         </section>
+
+        {houseId && <AccesoPeatonal houseId={houseId} />}
       </div>
     </main>
   );

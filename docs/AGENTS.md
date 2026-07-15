@@ -2,10 +2,48 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-13
+> Última actualización: 2026-07-14
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Acceso peatonal por rostro — terminal DS-K1T342 (2026-07-14) ⏳ deploy pendiente
+
+Se instaló la "Puerta Peatonal": terminal facial Hikvision **DS-K1T342EFWX-E1** en `192.168.1.89`
+(red de la caseta), **standalone** con su propia BD de usuarios/rostros e **ISAPI REST completo**
+(firmware V4.39.180 — a diferencia del DS-K2812 no necesita SDK). Las tarjetas RFID del mazo NO son
+compatibles con esta terminal → el acceso peatonal es 100% por reconocimiento de rostro.
+
+- **Flujo**: vecino toma foto de su cara (fondo blanco) en la app → comité aprueba → la Orin la
+  enrola en la terminal por ISAPI. N rostros por casa (cap 10).
+- **REGLA DE NEGOCIO (Director, 2026-07-14): la peatonal NUNCA se suspende** — ni por mora ni por
+  override; el acceso a pie a la vivienda no se restringe. La mora solo gobierna el acceso
+  vehicular. Un rostro solo sale por retiro administrativo (`face_retire`). **Migr. 066** redefine
+  `face_sync_plan` (solo enroll+remove) y `face_mark` (rechaza suspend/reactivate); el poller de la
+  Orin ya no trae ramas de suspensión facial. QA con ROLLBACK: casa con mora extrema + override
+  forzado → el plan no emite acción para su rostro ✅ · `face_mark('suspend')` → "accion invalida" ✅.
+- **Migr. 065** — `vecino.face_enrollments` (enroll_no IDENTITY desde 1001 = employeeNo en la
+  terminal; **la foto vive en la BD** como `photo_b64` JPEG ~100 KB: biometría NO va a bucket público
+  y la Orin la baja con su token de bot, sin service key). RPCs: `face_submit`, `face_retire`,
+  `face_review`, `face_photo`, `face_panel_data` (auth) + `face_sync_plan`/`face_mark` (token
+  `bot_config`, patrón rfid). Aplicada en prod + `NOTIFY pgrst`.
+- **UI vecino** `mi-cuenta/AccesoPeatonal.tsx`: captura con cámara (`capture="user"`), compresión
+  canvas 800px/0.85, borrador en localStorage (anti-kill de la PWA al abrir cámara), estados y
+  motivo de rechazo visibles, quitar mientras no esté activa.
+- **UI comité** `comite/AccesoPeatonal.tsx`: bandeja "Por revisar" con foto (vía `face_photo`),
+  aprobar/rechazar con motivo, lista de rostros registrados con retiro (borra de la terminal en el
+  siguiente ciclo).
+- **Bridge Orin** (`~/access-bridge/app/`): nuevo `terminal.py` (cliente ISAPI digest: UserInfo
+  Record/Modify/Delete, FDLib FaceDataRecord multipart, vigencias canónicas 2020→2036 / 2000 para
+  suspensión) + `face_cycle()` en el poller (mismo patrón plan→hardware→mark→notify; notifica por
+  `rfid_notify` con encabezado 🚶). `/health` ahora incluye `terminal` sin cambiar las llaves
+  históricas. **Desplegado y activo** (restart vía `pkill uvicorn`, systemd lo relanza).
+- **QA**: ciclo usuario crear/suspender/reactivar/borrar verificado contra la terminal real ✅ ·
+  flujo BD completo (submit→approve→plan con foto→enrolada→suspend→remove) con BEGIN/ROLLBACK ✅ ·
+  `npm run build` ✅.
+- **Pendiente**: deploy EasyPanel del front · E2E físico (foto real → cara abre la puerta → mora
+  bloquea) · borrar usuario "prueba" del instalador (employeeNo 00000001) tras validar · password
+  admin de la terminal es el mismo Weak del controlador (endurecer junto con el housekeeping).
 
 ## Baja de vehículos por el comité (2026-07-13) ✅
 
