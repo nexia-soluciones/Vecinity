@@ -27,9 +27,11 @@ compatibles con esta terminal → el acceso peatonal es 100% por reconocimiento 
   y la Orin la baja con su token de bot, sin service key). RPCs: `face_submit`, `face_retire`,
   `face_review`, `face_photo`, `face_panel_data` (auth) + `face_sync_plan`/`face_mark` (token
   `bot_config`, patrón rfid). Aplicada en prod + `NOTIFY pgrst`.
-- **UI vecino** `mi-cuenta/AccesoPeatonal.tsx`: captura con cámara (`capture="user"`), compresión
-  canvas 800px/0.85, borrador en localStorage (anti-kill de la PWA al abrir cámara), estados y
-  motivo de rechazo visibles, quitar mientras no esté activa.
+- **UI vecino** `_components/AccesoPeatonal.tsx` (se muestra en **mi-cuenta Y credenciales**; en
+  credenciales el bloque "Tarjeta peatonal · Próximamente" pasó a "🚶 Acceso peatonal · incluido,
+  sin tarjeta" apuntando a la sección): captura con cámara (`capture="user"`), compresión canvas
+  800px/0.85, borrador en localStorage (anti-kill de la PWA al abrir cámara), estados y motivo de
+  rechazo visibles, quitar mientras no esté activa.
 - **UI comité** `comite/AccesoPeatonal.tsx`: bandeja "Por revisar" con foto (vía `face_photo`),
   aprobar/rechazar con motivo, lista de rostros registrados con retiro (borra de la terminal en el
   siguiente ciclo).

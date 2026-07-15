@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { generarReciboAbono } from "../recibo-actions";
 import { VerResolucionButton } from "../_components/VerResolucionButton";
-import AccesoPeatonal from "./AccesoPeatonal";
+import AccesoPeatonal from "../_components/AccesoPeatonal";
 
 type Mov = {
   id: string;

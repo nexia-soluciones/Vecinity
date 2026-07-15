@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc, runOrError } from "@/lib/rpc";
+import AccesoPeatonal from "../_components/AccesoPeatonal";
 
 /**
  * Credenciales de acceso (tarjetas PVC impresas en la Zebra).
@@ -415,17 +416,18 @@ export default function CredencialesPage() {
               )}
             </div>
 
-            {/* Peatonal: aún no hay tarjetas físicas de este tipo — se muestra como próximamente.
-                Para habilitarla: quitar este bloque y restaurar el selector de miembros (ver git). */}
-            <div className="border-t border-slate-100 pt-3 opacity-60">
-              <p className="text-sm font-bold text-slate-500">
-                🚶 Tarjeta peatonal{" "}
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                  Próximamente
+            {/* Peatonal: sin tarjeta — la puerta abre con reconocimiento de rostro.
+                El registro completo vive en la sección "Acceso peatonal" de abajo. */}
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-sm font-bold text-slate-700">
+                🚶 Acceso peatonal{" "}
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                  incluido · sin tarjeta
                 </span>
               </p>
               <p className="text-xs text-slate-400 mt-1">
-                Muy pronto podrás solicitar tarjetas de acceso peatonal para los miembros de tu casa.
+                La puerta peatonal abre con <b>reconocimiento de rostro</b>. Registra a las
+                personas de tu casa en la sección de abajo ↓
               </p>
             </div>
 
@@ -457,6 +459,8 @@ export default function CredencialesPage() {
             </div>
           </section>
         )}
+
+        {houseId && <AccesoPeatonal houseId={houseId} />}
 
         {/* Mis solicitudes */}
         <section className="mt-7">
