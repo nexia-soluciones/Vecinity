@@ -2,10 +2,48 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-14
+> Última actualización: 2026-07-15
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## 🔮 Módulo futuro — Presencia sin cámaras por WiFi CSI (ESPectre) (2026-07-15) 📋 PLAN APROBADO, SIN EJECUTAR
+
+Plan de piloto aprobado por Juan; **bloqueado por hardware** (comprar 2× ESP32-C6 con antena
+externa IPEX, ~$150–300 MXN c/u). Nada construido aún — esta entrada es el punto de retome.
+
+**Qué es**: detección de presencia/movimiento en áreas comunes SIN cámaras ni PIR, leyendo las
+perturbaciones de la señal WiFi (CSI) con un ESP32. Caso de uso del piloto: **movimiento en el
+salón de eventos sin reserva activa → alerta Telegram a vigilantes** (cruza con
+`calendario_reservas` + `tg_send`/pg_net + anti-spam en BD, todo ya existente).
+
+**Repos evaluados** (2026-07-15): `francescopace/espectre` (elegido — componente ESPHome maduro
+8.8k⭐, autocalibración, GPL v3), `espressif/esp-csi` (SDK oficial Apache-2.0 — ruta si algún día
+se productiza firmware propio), `ruvnet/ruview` (descartado: claims infladas — pose/vitales por
+WiFi no reproducible en ESP32; el propio repo admite pose ~2.5% PCK).
+
+**Decisión de arquitectura**: SIN Home Assistant y SIN broker MQTT — ESPHome hace POST HTTP
+directo (`on_state` → `http_request`) a una RPC token-gated de Supabase, mismo patrón que Caty /
+print-bridge / access-bridge. Cero infra nueva en el VPS.
+
+**Plan por fases**:
+1. **F0 (Juan)**: comprar ESP32-C6 ×2; verificar cobertura WiFi 2.4GHz en el salón (el sensor debe
+   quedar a 3–8 m del AP; sin cobertura → cambiar de zona o agregar AP).
+2. **F1 — gate**: flashear ESPectre vía ESPHome en la Mac y validar en banco ~1 semana (falsos
+   positivos/hora en cuarto vacío, detección al entrar). Si no es estable, el piloto muere aquí.
+3. **F2 — BD**: `vecino.presence_sensors` (catálogo + token + heartbeat, patrón `worker_health`) y
+   `vecino.presence_events` (append-only); RPC `sensor_report(token, estado)` SECURITY DEFINER;
+   RLS solo comité/vigilantes; debounce/anti-spam EN LA BD, no en firmware.
+4. **F3 — negocio**: movimiento en salón + sin reserva en ventana ±30 min → `tg_send` a vigilantes
+   (sin parse_mode) con anti-spam por transición. **Fail open**: sensor caído o RPC con error
+   NUNCA alarma — solo badge "sensor sin señal" para el comité.
+5. **F4 — sitio**: instalar en el salón, informar al comité (sensor anónimo de movimiento, no
+   identifica personas), observar 2–4 semanas → go/no-go para más zonas (caseta, áreas comunes).
+
+**Criterio de éxito**: detección de entrada real <30 s, <2 falsos positivos/semana, alerta solo
+sin reserva activa. **Limitaciones conocidas de ESPectre**: precisión muy dependiente del entorno,
+no distingue persona/mascota, rango óptimo 3–8 m, concreto armado degrada señal, requiere ~10 s
+inmóvil al boot para autocalibrar.
 
 ## Acceso peatonal por rostro — terminal DS-K1T342 (2026-07-14) ✅ EN PRODUCCIÓN
 
