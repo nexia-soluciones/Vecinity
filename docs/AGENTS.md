@@ -283,7 +283,7 @@ Mecanismo de migración de residentes del sistema viejo (Django/PythonAnywhere) 
 - **Guardias (1 cuenta por guardia, role `guardia`, aprobados, colonia Villa Catania, sin house_id):**
   Antonio Serrano (`antonio.serrano@villacatania.mx`) y Felipe (`felipe.caseta@villacatania.mx`), pass temporal
   `Caseta2026` (correos solo-login, reset por correo NO aplica → cambio de pass vía Admin API). Login verificado.
-  ⚠️ Sigue viva la cuenta demo `guardia@cantera.test`/`Guardia2026` (creds conocidas) — pendiente borrar.
+  ⚠️ Sigue viva la cuenta demo `guardia@cantera.test` (password rotado 2026-07-15; vive en `.env.local`, NO publicar).
 - **Cámara forzada en caseta (commit `792fd1c`, deployado):** los 5 inputs de foto de `/vigilancia` (INE+placas
   de visita walk-in, INE al dar entrada, proveedor nuevo y "foto del día" de recurrentes) tenían solo
   `accept="image/*"` (dejaban elegir galería) → se agregó `capture="environment"` para abrir la cámara trasera
@@ -308,8 +308,8 @@ Verificación contra la **BD real de producción** (no solo docs) + captura de p
 | Cuenta | Rol | Password | Notas |
 |---|---|---|---|
 | `comite@cantera.test` | comité | `Comite2026` | casa 128 |
-| `juanperez@cantera.test` | residente | `Vecino2026` | ligado a **casa 100** (al corriente) para demo |
-| `guardia@cantera.test` | guardia | `Guardia2026` | aterriza en `/vigilancia` |
+| `juanperez@cantera.test` | residente | *(rotada 2026-07-15 — en `.env.local`)* | ligado a **casa 100** (al corriente) para demo |
+| `guardia@cantera.test` | guardia | `(rotada — .env.local)` | aterriza en `/vigilancia` |
 
 > Passwords fijados vía **Auth Admin API** (`PUT /auth/v1/admin/users/{id}`), no por MCP
 > (`update_auth_user` exige DATABASE_URL = puerto 5432 bloqueado).
@@ -509,7 +509,7 @@ Role-aware, gateado por sesión + `approval_status`. Validado end-to-end con RLS
 - Comité/admin: panel **Solicitudes pendientes** → Aprobar/Rechazar (`profiles.approval_status`). ✅
 - `/esperando` enlaza a `/dashboard` cuando aprobado.
 Cuentas de prueba (colonia La Cantera): **comite@cantera.test / Comite2026** (comité, casa 128 saldo 1600) ·
-**juanperez@cantera.test / Vecino2026** (residente pendiente, para demo de aprobación).
+**juanperez@cantera.test** (residente demo casa 100; password rotado 2026-07-15 — en `.env.local`).
 
 ## Telegram — bot "Caty" (@Caty_VCatania_bot) (2026-06-22)
 - Token en `vecinity-app/.env.local` (`TELEGRAM_BOT_TOKEN`, gitignored) + embebido en el workflow n8n. Username público: `Caty_VCatania_bot` (`NEXT_PUBLIC_TELEGRAM_BOT`).
@@ -1213,3 +1213,23 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - QA: residente ve cámara y abre ✓ · residente NO lee bitácora (RPC rechaza) ✓ · comité ve
   door_log con atribución ✓ · smoke headless residente demo en /dashboard/visitas ✓ · build ✓.
 - ⏳ Deploy EasyPanel pendiente (2º del día) para que los vecinos lo vean.
+
+### Adenda 2026-07-15 (3) — Manuales por rol + hardening puerta (migr. 069) + rotación creds demo ✅
+- **Manuales**: `docs/manual/` reestructurado — `Manual_de_Uso_Vecinity.md` ahora es índice;
+  nuevos `MANUAL_VECINO.md`, `MANUAL_ADMINISTRADOR.md`, `MANUAL_VIGILANTE.md` (detallados,
+  con todo lo de 2026-06/07: mi-cuenta+recibos, rostro peatonal, cámara/puerta, multas,
+  conciliación persistente, credenciales, comunicados, calendario, RFID panel, SOS v2, Caty).
+  Capturas nuevas 08/30-36 (`capture-manual-3.mjs`, solo cuentas demo casa 100 — sin PII;
+  páginas del comité con datos reales van SOLO en texto).
+- **Migr. 069** (aplicada): la puerta/cámara pertenece a UNA colonia — `camera_state.colonia_id`
+  (Villa Catania) y todos los gates (`is_door_operator(p_device)`, door_open/camera_view/
+  door_status/door_log/RLS) exigen perfil de esa colonia. `CamaraPuerta` se auto-oculta si
+  la puerta no es de tu colonia. Cierra el hueco: perfiles de otras colonias (o demos
+  futuras) ya no pueden ver/abrir la puerta física.
+- **Seguridad**: passwords de `juanperez@cantera.test` y `guardia@cantera.test` ROTADOS
+  (estaban publicados aquí) → viven en `.env.local` (`DEMO_VECINO_PASS`/`DEMO_GUARDIA_PASS`);
+  scripts de captura los leen de env. Menciones viejas redactadas.
+- **Gotcha corregido en sesión**: para el flip temporal de rol se tomó un profile con
+  `LIMIT 1` que era una vecina real (se restauró de inmediato) — SIEMPRE resolver el id
+  por EMAIL antes de mutar un perfil.
+- ⏳ Deploy EasyPanel pendiente (build ✓): auto-ocultado de CamaraPuerta por colonia.

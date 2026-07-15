@@ -42,6 +42,9 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
   const [puerta, setPuerta] = useState<EstadoPuerta>({ fase: "reposo" });
   const [confirmando, setConfirmando] = useState(false);
   const [log, setLog] = useState<LogEntry[] | null>(null);
+  // La puerta pertenece a UNA colonia (migr. 069): si la RPC dice que no es
+  // la del usuario, la card entera desaparece en vez de mostrar un error.
+  const [oculta, setOculta] = useState(false);
   const vivo = useRef(false);
 
   // ── Bitácora (solo comité/guardia; la RPC rechaza a los demás) ──
@@ -67,6 +70,9 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
         if (res.ok) {
           setFrame(res.data);
           setCamMsg(res.data.fresh ? null : "Conectando con la caseta…");
+        } else if (/no pertenece a tu colonia/i.test(res.error)) {
+          setOculta(true);
+          return;
         } else {
           setCamMsg(res.error);
         }
@@ -130,6 +136,8 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
         second: "2-digit",
       })
     : null;
+
+  if (oculta) return null;
 
   return (
     <section className="mt-6 bg-white rounded-2xl ring-1 ring-slate-100 overflow-hidden">
