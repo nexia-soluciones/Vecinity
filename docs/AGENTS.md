@@ -1183,3 +1183,21 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   correo en BD); invitación CAT-145 restaurada (accepted_at=NULL, vence 22-ago).
   Cuenta vieja activa — revisar si queda huérfana tras el nuevo registro.
   ⏳ Deploy EasyPanel pendiente con 909bece+c74444c (UI tarjetas).
+
+## Sesión 2026-07-15 — Puerta peatonal desde la app: cámara en vivo + apertura remota ✅ (migr. 067)
+- **Pedido (Juan)**: "¿pueden ver la cámara en tiempo real en Vecinity y abrir la puerta desde la app?"
+- **Migr. 067** (`067_puerta_camara.sql`, aplicada en prod): `door_commands` (cola+bitácora,
+  TTL 30s) + `camera_state` (singleton frame) + RPCs app (`door_open`, `door_status`,
+  `camera_view` — gate `is_door_operator()`: admin/comite/guardia aprobados) + RPCs Orin
+  token-gated (`bridge_fast_poll`, `door_mark`, `camera_push`).
+- **Orin (nexia-access-bridge)**: `terminal.open_door()` (ISAPI RemoteControl XML) +
+  `terminal.snapshot()` (JPEG→b64); `poller.py::_fast_loop` 24/7 cada 2s (1s con espectador).
+  Cámara solo bombea si `watch_until > now()` — sin espectador, cero tráfico.
+- **UI**: `src/app/_components/CamaraPuerta.tsx` en `/dashboard/comite` y `/vigilancia` —
+  vista con badge EN VIVO (frame <10s), botón Abrir con confirmación de 2 pasos y feedback
+  del comando; leyenda de auditoría.
+- **QA**: residente rechazado por RPC ✓ · apertura real E2E `result=ok` en **2.7s** ✓ ·
+  frame 97KB fresco a los 5s ✓ · TTL: comando vencido → `expirado`, jamás ejecutado ✓ ·
+  smoke headless (guardia@cantera.test): login → card → frame EN VIVO en el navegador ✓ ·
+  `npm run build` ✓.
+- ⏳ Deploy EasyPanel pendiente (UI); la Orin ya corre el código nuevo en prod.

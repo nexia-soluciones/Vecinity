@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
+import CamaraPuerta from "@/app/_components/CamaraPuerta";
 import { leerPlaca } from "./actions";
 import {
   comprimirFoto,
@@ -1084,6 +1085,9 @@ export default function VigilanciaPage() {
         >
           📷 Escanear pase QR
         </button>
+
+        {/* Cámara de la puerta peatonal + apertura remota */}
+        <CamaraPuerta />
 
         {/* Registrar visita en caseta — bloque independiente (lo más usado) */}
         <section className="mt-4 rounded-3xl bg-brand-50 ring-1 ring-brand-200 p-4 shadow-sm">
