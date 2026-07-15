@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import CamaraPuerta from "@/app/_components/CamaraPuerta";
 
 type Visita = {
   id: string;
@@ -112,6 +113,13 @@ export default function VisitasPage() {
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Registrar visita</h1>
         <p className="text-sm text-slate-500">
           Genera un pase con QR y compártelo por WhatsApp con tu invitado.
+        </p>
+
+        {/* ¿Tu visita llegó a pie? Mírala en la cámara y ábrele desde aquí. */}
+        <CamaraPuerta />
+        <p className="text-[11px] text-slate-400 -mt-1 px-1">
+          ¿Tu visita llega a pie? Mírala en la cámara y ábrele — la apertura
+          queda registrada a tu nombre.
         </p>
 
         {/* Formulario */}

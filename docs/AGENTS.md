@@ -1201,3 +1201,15 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   smoke headless (guardia@cantera.test): login → card → frame EN VIVO en el navegador ✓ ·
   `npm run build` ✓.
 - ⏳ Deploy EasyPanel pendiente (UI); la Orin ya corre el código nuevo en prod.
+
+### Adenda 2026-07-15 (2) — Vecinos también abren la puerta (migr. 068) ✅
+- Deploy EasyPanel de la mañana verificado en prod (smoke headless guardia: frame EN VIVO ✓).
+- **Decisión Juan**: el vecino puede abrirle a su visita — el control es la AUDITORÍA, no el rol.
+- Migr. 068 (aplicada en prod): `is_door_operator()` → cualquier perfil `aprobado`;
+  nueva `door_log(p_limit)` (solo admin/comite/guardia) con nombre + casa + rol + resultado.
+  La bitácora directa (SELECT door_commands) sigue vedada a residentes.
+- UI: `CamaraPuerta` montada en `/dashboard/visitas` ("¿tu visita llega a pie? ábrele");
+  prop `conBitacora` → lista "Últimas aperturas" en la card del comité (se refresca al abrir).
+- QA: residente ve cámara y abre ✓ · residente NO lee bitácora (RPC rechaza) ✓ · comité ve
+  door_log con atribución ✓ · smoke headless residente demo en /dashboard/visitas ✓ · build ✓.
+- ⏳ Deploy EasyPanel pendiente (2º del día) para que los vecinos lo vean.

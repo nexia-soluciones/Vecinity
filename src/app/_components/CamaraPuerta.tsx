@@ -20,6 +20,13 @@ import { callRpc } from "@/lib/rpc";
 
 type Frame = { frame_b64: string | null; frame_at: string | null; fresh: boolean };
 type DoorStatus = { result: string | null; error: string | null; executed_at: string | null };
+type LogEntry = {
+  requested_at: string;
+  result: string | null;
+  nombre: string | null;
+  casa: string | null;
+  rol: string | null;
+};
 
 type EstadoPuerta =
   | { fase: "reposo" }
@@ -28,13 +35,23 @@ type EstadoPuerta =
   | { fase: "ok" }
   | { fase: "error"; msg: string };
 
-export default function CamaraPuerta() {
+export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: boolean }) {
   const [abierta, setAbierta] = useState(false);
   const [frame, setFrame] = useState<Frame | null>(null);
   const [camMsg, setCamMsg] = useState<string | null>(null);
   const [puerta, setPuerta] = useState<EstadoPuerta>({ fase: "reposo" });
   const [confirmando, setConfirmando] = useState(false);
+  const [log, setLog] = useState<LogEntry[] | null>(null);
   const vivo = useRef(false);
+
+  // ── Bitácora (solo comité/guardia; la RPC rechaza a los demás) ──
+  const cargarLog = useCallback(async () => {
+    const res = await callRpc<LogEntry[]>("door_log", { p_limit: 10 });
+    if (res.ok) setLog(res.data);
+  }, []);
+  useEffect(() => {
+    if (abierta && conBitacora) cargarLog();
+  }, [abierta, conBitacora, cargarLog]);
 
   // ── Loop de cámara: mientras la vista esté abierta y la pestaña visible ──
   useEffect(() => {
@@ -73,6 +90,7 @@ export default function CamaraPuerta() {
         clearInterval(timer);
         if (res.data.result === "ok") {
           setPuerta({ fase: "ok" });
+          if (conBitacora) cargarLog();
           setTimeout(() => setPuerta({ fase: "reposo" }), 5000);
         } else {
           setPuerta({
@@ -92,7 +110,7 @@ export default function CamaraPuerta() {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [puerta]);
+  }, [puerta, conBitacora, cargarLog]);
 
   const abrirPuerta = useCallback(async () => {
     setConfirmando(false);
@@ -205,6 +223,35 @@ export default function CamaraPuerta() {
           <p className="text-[11px] text-slate-400">
             Cada apertura queda registrada con tu usuario, fecha y hora.
           </p>
+
+          {conBitacora && log && log.length > 0 && (
+            <div className="mt-1">
+              <h3 className="text-xs font-bold text-slate-500 mb-1.5">Últimas aperturas</h3>
+              <ul className="flex flex-col gap-1">
+                {log.map((e, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2.5 py-1.5"
+                  >
+                    <span className="text-slate-600 truncate">
+                      {e.result === "ok" ? "🟢" : e.result === "expirado" ? "🟡" : "🔴"}{" "}
+                      {e.nombre || "—"}
+                      {e.casa ? ` · casa ${e.casa}` : ""}
+                      {e.rol && e.rol !== "residente" ? ` (${e.rol})` : ""}
+                    </span>
+                    <span className="text-slate-400 shrink-0 ml-2">
+                      {new Date(e.requested_at).toLocaleString("es-MX", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </section>

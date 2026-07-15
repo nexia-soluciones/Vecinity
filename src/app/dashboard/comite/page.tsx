@@ -633,7 +633,7 @@ export default function PanelComite() {
         {/* Acceso RFID de la caseta */}
         <AccesoRfid />
         <AccesoPeatonal />
-        <CamaraPuerta />
+        <CamaraPuerta conBitacora />
 
         {/* Top morosos */}
         <section className="mt-6 mb-4">
