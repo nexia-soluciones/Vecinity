@@ -165,14 +165,14 @@ NexIA: es un script de 1 minuto.
 Vecinity se vende en alianza con nuestro **socio instalador** (el mismo que
 instaló el equipo de la privada de referencia). El paquete:
 
-| Capa | Qué incluye | Quién la pone |
-|---|---|---|
-| **Software** | App Vecinity (vecinos, comité, caseta), bot Caty en Telegram, hosting, respaldos y soporte | NexIA |
-| **Acceso vehicular** | Controlador Hikvision + lectores RFID en la pluma + tarjetas | Socio instalador |
-| **Acceso peatonal** | Terminal facial Hikvision (rostro, sin llaves ni tarjetas) | Socio instalador |
-| **Cámara en vivo + apertura remota** | La misma terminal transmite a la app y abre desde ella | NexIA (integración) |
-| **Puente local** | Mini-computadora en la caseta que conecta el equipo con la nube (sin abrir puertos, sobrevive cortes de internet) | NexIA + socio |
-| **Credenciales PVC** | Impresora de tarjetas con QR verificable (opcional) | NexIA + socio |
+| Capa                                 | Qué incluye                                                                                                       | Quién la pone       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **Software**                         | App Vecinity (vecinos, comité, caseta), bot Caty en Telegram, hosting, respaldos y soporte                        | NexIA               |
+| **Acceso vehicular**                 | Controlador Hikvision + lectores RFID en la pluma + tarjetas                                                      | SOLRAM              |
+| **Acceso peatonal**                  | Terminal facial Hikvision (rostro, sin llaves ni tarjetas)                                                        | SOLRAM              |
+| **Cámara en vivo + apertura remota** | La misma terminal transmite a la app y abre desde ella                                                            | NexIA (integración) |
+| **Puente local**                     | Mini-computadora en la caseta que conecta el equipo con la nube (sin abrir puertos, sobrevive cortes de internet) | NexIA + SOLRAM      |
+| **Credenciales PVC**                 | Impresora de tarjetas con QR verificable                                                                          | NexIA               |
 
 Puntos técnicos que venden (y son verdad):
 
@@ -186,6 +186,10 @@ Puntos técnicos que venden (y son verdad):
   vehicular. Eso tranquiliza a las asambleas.
 - **Todo deja bitácora**: quién abrió la puerta, quién aprobó cada peso,
   quién suspendió y por qué.
+- **Cumplimiento LFPDPPP incluido**: cada colonia publica su **Aviso de
+  Privacidad** en la app y el sistema registra la aceptación de cada vecino
+  (fecha y versión) — el comité ve el avance en su panel. En la villa demo lo
+  ves al entrar por primera vez con una cuenta que no lo haya aceptado.
 
 > 💰 **Precios**: la propuesta económica (licencia mensual por casa +
 > hardware + instalación) la arma NexIA con el socio instalador según el

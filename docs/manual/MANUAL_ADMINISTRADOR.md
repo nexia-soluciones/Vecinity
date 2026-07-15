@@ -58,6 +58,15 @@ Las **solicitudes de nuevos vecinos** también aparecen en tu panel principal:
 
 <img src="screens/06-dashboard-comite.png" width="300" />
 
+### Aviso de privacidad (LFPDPPP)
+
+La card **📜 Aviso de privacidad** muestra el avance de aceptación del aviso de
+tu colonia: cuántos vecinos lo han aceptado (barra de progreso) y, expandida,
+la lista con nombre, casa y fecha. El aviso aparece a cada usuario al entrar a
+la app hasta que lo acepte; la aceptación queda registrada con versión y fecha
+— evidencia de cumplimiento ante cualquier requerimiento. Para actualizar el
+texto del aviso (nueva versión que se vuelve a pedir a todos), contacta a NexIA.
+
 ---
 
 ## 3. Aprobaciones diarias

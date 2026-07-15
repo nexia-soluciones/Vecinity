@@ -8,6 +8,7 @@ import { callRpc } from "@/lib/rpc";
 import AccesoRfid from "./AccesoRfid";
 import AccesoPeatonal from "./AccesoPeatonal";
 import CamaraPuerta from "@/app/_components/CamaraPuerta";
+import AvisoPrivacidadAvance from "./AvisoPrivacidadAvance";
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
@@ -634,6 +635,7 @@ export default function PanelComite() {
         <AccesoRfid />
         <AccesoPeatonal />
         <CamaraPuerta conBitacora />
+        <AvisoPrivacidadAvance />
 
         {/* Top morosos */}
         <section className="mt-6 mb-4">

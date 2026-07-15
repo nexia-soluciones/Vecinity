@@ -1250,3 +1250,22 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   PWA no stores, no CCTV), checklist de levantamiento y cierre. Índice actualizado.
 - Gotchas seed: `houses.estatus` es enum (`al_corriente|con_adeudo|en_convenio`);
   `comunicados.autor` CHECK solo `comite|caty`.
+
+### Adenda 2026-07-15 (5) — Aviso de Privacidad con registro de aceptación (migr. 070) ✅
+- **Pedido (Juan)**: aviso de privacidad integral (LFPDPPP) al entrar a la app en Villa
+  Catania, con "aceptar ahora / aceptar después" y registro de aprobación.
+- **Migr. 070** (aplicada): `privacy_notices` (por colonia, VERSIONADO, un activo por
+  colonia — publicar v2 vuelve a pedir aceptación a todos) + `privacy_acceptances`
+  (UNIQUE notice+profile) + RPCs `privacy_status()` / `privacy_accept()` /
+  `privacy_report()` (avance para comité con nombre/casa/fecha). Aviso integral de
+  Villa Catania sembrado (texto de Juan, verbatim) + aviso genérico en Villa Aurora demo.
+- **UI**: `AvisoPrivacidad.tsx` (modal con markdown ligero; "Aceptar después" = solo
+  sessionStorage, reaparece en la siguiente sesión — informa, no bloquea) montado en
+  dashboard layout y /vigilancia; `AvisoPrivacidadAvance.tsx` (card X/Y + barra + lista)
+  en el panel del comité.
+- **QA**: status pendiente para usuario Catania ✓ / sin aviso para Aurora hasta sembrarlo ✓;
+  E2E navegador: modal aparece → aceptar registra → recarga no reaparece ✓; report comité
+  1/3 con Valeria ✓. GOTCHA: el primer accept tras la migración devolvió ok sin insertar
+  (caché de PostgREST recién NOTIFY) — reintento inmediato funcionó; si pasa en prod,
+  reintentar/verificar con privacy_report.
+- ⏳ Deploy EasyPanel pendiente. Captura 37-aviso-privacidad.png en manuales.

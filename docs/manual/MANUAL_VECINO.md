@@ -98,6 +98,14 @@ Las siguientes veces entra con tu **correo y contraseña**.
   toca **Instalar**. Queda en tu pantalla de inicio como cualquier app, sin
   ocupar casi espacio.
 
+> 📜 **Aviso de privacidad:** la primera vez que entres, la app te mostrará el
+> **Aviso de Privacidad** de tu colonia (LFPDPPP). Léelo y toca **"He leído y
+> acepto"** — tu aceptación queda registrada con fecha y versión. Si eliges
+> **"Aceptar después"**, podrás seguir usando la app y te lo volverá a mostrar
+> la próxima vez.
+
+<img src="screens/37-aviso-privacidad.png" width="300" />
+
 ---
 
 ## 5. Tu panel
