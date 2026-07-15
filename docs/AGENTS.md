@@ -7,7 +7,15 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
-## Acceso peatonal por rostro — terminal DS-K1T342 (2026-07-14) ⏳ deploy pendiente
+## Acceso peatonal por rostro — terminal DS-K1T342 (2026-07-14) ✅ EN PRODUCCIÓN
+
+**E2E físico validado el mismo día**: foto desde la app → aprobación del comité → la Orin enrola
+(Telegram "🙂 ENROLADO") → **la terminal reconoce el rostro y abre la puerta**. 3 rostros reales
+enrolados (casa del QA). Deploy EasyPanel auto desde push a main verificado en prod (buscar el
+string del feature en los chunks JS de `/_next/static/` — ojo: `vecinovigilante.` es la app VIEJA
+de Vite; la Next.js vive en `vecinity.`). Usuario "prueba" del instalador borrado de la terminal.
+En credenciales, "Tarjeta peatonal · Próximamente" pasó a "🚶 Acceso peatonal · incluido, sin
+tarjeta" con la sección de registro embebida (las tarjetas RFID no son compatibles con la terminal).
 
 Se instaló la "Puerta Peatonal": terminal facial Hikvision **DS-K1T342EFWX-E1** en `192.168.1.89`
 (red de la caseta), **standalone** con su propia BD de usuarios/rostros e **ISAPI REST completo**
@@ -43,9 +51,8 @@ compatibles con esta terminal → el acceso peatonal es 100% por reconocimiento 
 - **QA**: ciclo usuario crear/suspender/reactivar/borrar verificado contra la terminal real ✅ ·
   flujo BD completo (submit→approve→plan con foto→enrolada→suspend→remove) con BEGIN/ROLLBACK ✅ ·
   `npm run build` ✅.
-- **Pendiente**: deploy EasyPanel del front · E2E físico (foto real → cara abre la puerta → mora
-  bloquea) · borrar usuario "prueba" del instalador (employeeNo 00000001) tras validar · password
-  admin de la terminal es el mismo Weak del controlador (endurecer junto con el housekeeping).
+- **Pendiente**: password admin de la terminal es el mismo Weak del controlador (endurecer junto
+  con el housekeeping) · cámara nueva detectada en `192.168.1.87` (RTSP), posible integración futura.
 
 ## Baja de vehículos por el comité (2026-07-13) ✅
 
