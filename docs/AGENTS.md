@@ -1269,3 +1269,13 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   (caché de PostgREST recién NOTIFY) — reintento inmediato funcionó; si pasa en prod,
   reintentar/verificar con privacy_report.
 - ⏳ Deploy EasyPanel pendiente. Captura 37-aviso-privacidad.png en manuales.
+
+### Cierre 2026-07-15 — Verificación en prod + fix ocultado de card por colonia ✅
+- Smoke integral en PROD tras el 2º deploy: aviso aparece a quien no ha aceptado
+  (comité demo y guardia Catania) ✓ · no reaparece a quien aceptó ✓ · card 📜 avance
+  en panel comité ✓ · cámara Catania EN VIVO ✓.
+- Gap detectado y corregido: `CamaraPuerta` colapsada se veía en colonias sin puerta —
+  ahora consulta `is_door_operator()` AL MONTAR (RPC sin efectos, no activa el bombeo)
+  y no pinta nada hasta confirmar; el error de camera_view queda de respaldo.
+  Verificado local: oculta en Aurora ✓, visible y EN VIVO en Catania ✓.
+- ⏳ Un deploy más de EasyPanel cuando convenga (cambio cosmético, sin prisa).

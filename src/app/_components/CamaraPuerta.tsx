@@ -42,10 +42,19 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
   const [puerta, setPuerta] = useState<EstadoPuerta>({ fase: "reposo" });
   const [confirmando, setConfirmando] = useState(false);
   const [log, setLog] = useState<LogEntry[] | null>(null);
-  // La puerta pertenece a UNA colonia (migr. 069): si la RPC dice que no es
-  // la del usuario, la card entera desaparece en vez de mostrar un error.
-  const [oculta, setOculta] = useState(false);
+  // La puerta pertenece a UNA colonia (migr. 069): la card solo existe para
+  // perfiles de esa colonia. Al montar se consulta is_door_operator() (sin
+  // efectos — no activa el bombeo de la Orin); mientras no responda, nada se
+  // pinta. El error de camera_view queda como respaldo.
+  const [oculta, setOculta] = useState(true);
   const vivo = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      const res = await callRpc<boolean>("is_door_operator", {});
+      setOculta(!(res.ok && res.data === true));
+    })();
+  }, []);
 
   // ── Bitácora (solo comité/guardia; la RPC rechaza a los demás) ──
   const cargarLog = useCallback(async () => {
