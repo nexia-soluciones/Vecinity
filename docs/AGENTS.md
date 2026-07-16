@@ -7,6 +7,16 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Entrega liga RFID + paneles abatibles — migr. 080 (2026-07-16) ✅
+
+Las ~92 vehiculares históricas están impresas pero SIN serial registrado (solo las 23
+impresas hoy por el sistema quedaron ligadas). En la ENTREGA (tarjeta en mano) el comité
+captura el N° impreso → `vehicles.tarjeta_rfid` + upsert `rfid_tags` (mismo efecto que la
+impresión nueva); si el sistema ya asignó serial (card_inventory) se muestra fijo.
+`card_deliveries.serial` guarda el número entregado. UI: paneles abatibles "Acceso RFID
+(caseta)" y "Impresas, por entregar (123)". GOTCHA de nuevo: DROP de la firma de 4 params
+antes de crear la de 5.
+
 ## Reset de entregas fantasma — migr. 079 (2026-07-16) ✅
 
 Las 96 tarjetas 'entregada' de la campaña vieja NUNCA se entregaron (card_deliveries
