@@ -474,23 +474,39 @@ export default function VigilanciaPage() {
     }
   }
 
-  // Módulo de visitas recurrentes: el vigilante corrige el nombre o revoca la tarjeta.
-  async function editarVf(c: { id: string; nombre: string | null }) {
-    const nombre = prompt("Nombre del visitante:", c.nombre ?? "");
+  // Proveedores recurrentes (domésticos): el vigilante corrige nombre/casa o
+  // da de baja. Las tarjetas de visita NO se editan desde vigilancia
+  // (decisión 2026-07-16) — su módulo es solo consulta.
+  async function editarProveedor(pr: { id: string; nombre: string; house: { numero: string } | null }) {
+    const nombre = prompt("Nombre del proveedor:", pr.nombre);
     if (nombre === null) return;
-    setVfMsg(null);
-    const res = await callRpc("vf_editar", { p_card_id: c.id, p_nombre: nombre });
-    if (!res.ok) return setVfMsg(res.error);
-    await cargarVfCards();
+    const casa = prompt("Casa a la que sirve:", pr.house?.numero ?? "");
+    if (casa === null) return;
+    let houseId: string | null = null;
+    if (casa.trim() && casa.trim() !== (pr.house?.numero ?? "")) {
+      const { data: h } = await supabaseBrowser
+        .from("houses")
+        .select("id")
+        .eq("numero", casa.trim())
+        .maybeSingle();
+      const house = h as unknown as { id: string } | null;
+      if (!house) return alert(`No encontré la casa ${casa.trim()}.`);
+      houseId = house.id;
+    }
+    const { error } = await supabaseBrowser.rpc("editar_proveedor", {
+      p_id: pr.id,
+      p_nombre: nombre.trim(),
+      p_house_id: houseId,
+    });
+    if (error) return alert(error.message.replace(/^.*?:\s/, ""));
+    await cargarRecurrentes();
   }
 
-  async function borrarVf(c: { id: string; nombre: string | null }) {
-    if (!confirm(`¿Borrar la tarjeta de "${c.nombre ?? "esta visita"}"? Dejará de ser válida al escanearla en caseta.`)) return;
-    const motivo = prompt("Motivo (opcional):") ?? "";
-    setVfMsg(null);
-    const res = await callRpc("vf_revocar", { p_card_id: c.id, p_motivo: motivo });
-    if (!res.ok) return setVfMsg(res.error);
-    await cargarVfCards();
+  async function bajaProveedor(pr: { id: string; nombre: string }) {
+    if (!confirm(`¿Dar de baja a "${pr.nombre}"? Dejará de aparecer en el tablero (su historial se conserva).`)) return;
+    const { error } = await supabaseBrowser.rpc("baja_proveedor", { p_id: pr.id });
+    if (error) return alert(error.message.replace(/^.*?:\s/, ""));
+    await cargarRecurrentes();
   }
 
   // Entrada/salida de una VISITA FRECUENTE desde su tarjeta escaneada:
@@ -1587,6 +1603,24 @@ export default function VigilanciaPage() {
                         {pr.tipo}
                         {dentro ? " · ● dentro" : ""}
                       </p>
+                      <div className="flex gap-3 mt-0.5">
+                        <button
+                          onClick={() => editarProveedor(pr)}
+                          className="text-sm text-slate-400 hover:text-slate-600 font-semibold"
+                          title="Corregir nombre o casa"
+                        >
+                          ✏️ Editar
+                        </button>
+                        {!dentro && (
+                          <button
+                            onClick={() => bajaProveedor(pr)}
+                            className="text-sm text-red-300 hover:text-red-500 font-semibold"
+                            title="Dar de baja"
+                          >
+                            🗑 Baja
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {dentro ? (
                       <button
@@ -1668,24 +1702,13 @@ export default function VigilanciaPage() {
                           {{ solicitada: "en trámite", en_cola: "en impresión", impresa: "impresa", entregada: "entregada" }[c.estado] ?? c.estado}
                         </p>
                       </div>
-                      <button
-                        onClick={() => editarVf(c)}
-                        className="rounded-xl bg-slate-100 text-slate-700 text-base font-semibold px-3 py-2 hover:bg-slate-200 shrink-0"
-                        title="Corregir nombre"
-                      >
-                        ✏️ Editar
-                      </button>
-                      <button
-                        onClick={() => borrarVf(c)}
-                        className="rounded-xl bg-red-50 text-red-600 text-base font-semibold px-3 py-2 hover:bg-red-100 shrink-0"
-                        title="Revocar tarjeta"
-                      >
-                        🗑 Borrar
-                      </button>
                     </li>
                   ))}
                 </ul>
               )}
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Las tarjetas se corrigen o revocan desde el comité — aquí son solo consulta.
+              </p>
             </div>
           )}
         </section>
