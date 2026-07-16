@@ -170,6 +170,13 @@ export default function VigilanciaPage() {
   const [activos, setActivos] = useState<ExtSvc[]>([]);
   const [staged, setStaged] = useState<Record<string, File>>({});
   const [showAdd, setShowAdd] = useState(false);
+
+  // Visitas recurrentes (tarjetas PVC de visita frecuente) — módulo abatible
+  const [vfOpen, setVfOpen] = useState(false);
+  const [vfCards, setVfCards] = useState<
+    { id: string; nombre: string | null; casa: string | null; estado: string; adentro: boolean; created_at: string }[]
+  >([]);
+  const [vfMsg, setVfMsg] = useState<string | null>(null);
   const [npNombre, setNpNombre] = useState("");
   const [npTipo, setNpTipo] = useState("limpieza");
   const [npCasa, setNpCasa] = useState("");
@@ -283,6 +290,13 @@ export default function VigilanciaPage() {
       .select("id, provider_id, house:houses(numero)")
       .is("fecha_salida", null);
     setActivos((act as unknown as ExtSvc[]) ?? []);
+  }, []);
+
+  const cargarVfCards = useCallback(async () => {
+    const res = await callRpc<
+      { id: string; nombre: string | null; casa: string | null; estado: string; adentro: boolean; created_at: string }[]
+    >("vf_listar", {});
+    if (res.ok) setVfCards(res.data ?? []);
   }, []);
 
   const cargarSos = useCallback(async () => {
@@ -458,6 +472,25 @@ export default function VigilanciaPage() {
     } finally {
       setScanBusy(false);
     }
+  }
+
+  // Módulo de visitas recurrentes: el vigilante corrige el nombre o revoca la tarjeta.
+  async function editarVf(c: { id: string; nombre: string | null }) {
+    const nombre = prompt("Nombre del visitante:", c.nombre ?? "");
+    if (nombre === null) return;
+    setVfMsg(null);
+    const res = await callRpc("vf_editar", { p_card_id: c.id, p_nombre: nombre });
+    if (!res.ok) return setVfMsg(res.error);
+    await cargarVfCards();
+  }
+
+  async function borrarVf(c: { id: string; nombre: string | null }) {
+    if (!confirm(`¿Borrar la tarjeta de "${c.nombre ?? "esta visita"}"? Dejará de ser válida al escanearla en caseta.`)) return;
+    const motivo = prompt("Motivo (opcional):") ?? "";
+    setVfMsg(null);
+    const res = await callRpc("vf_revocar", { p_card_id: c.id, p_motivo: motivo });
+    if (!res.ok) return setVfMsg(res.error);
+    await cargarVfCards();
   }
 
   // Entrada/salida de una VISITA FRECUENTE desde su tarjeta escaneada:
@@ -744,13 +777,14 @@ export default function VigilanciaPage() {
         cargarPaquetes(),
         cargarGenerales(),
         cargarRecurrentes(),
+        cargarVfCards(),
         cargarHistorial(),
         cargarMorosos(umbralSvc),
         cargarSos(),
       ]);
       setReady(true);
     })();
-  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes, cargarHistorial, cargarMorosos, cargarSos]);
+  }, [router, cargarTurno, cargarVisitas, cargarReservas, cargarPaquetes, cargarGenerales, cargarRecurrentes, cargarVfCards, cargarHistorial, cargarMorosos, cargarSos]);
 
   // SOS en vivo: realtime (instantáneo) + sondeo cada 20s como respaldo
   useEffect(() => {
@@ -808,10 +842,11 @@ export default function VigilanciaPage() {
       cargarReservas();
       cargarPaquetes();
       cargarRecurrentes();
+      cargarVfCards();
       cargarHistorial();
     }, 25000);
     return () => clearInterval(iv);
-  }, [coloniaId, cargarVisitas, cargarReservas, cargarPaquetes, cargarRecurrentes, cargarHistorial]);
+  }, [coloniaId, cargarVisitas, cargarReservas, cargarPaquetes, cargarRecurrentes, cargarVfCards, cargarHistorial]);
 
   async function subirFoto(file: File, sub: string): Promise<string | null> {
     if (!coloniaId) return null;
@@ -1593,6 +1628,65 @@ export default function VigilanciaPage() {
                 );
               })}
             </ul>
+          )}
+        </section>
+
+        {/* Visitas recurrentes (tarjetas PVC) — módulo abatible */}
+        <section className="mt-4 rounded-3xl bg-slate-100/70 ring-1 ring-slate-200 p-4">
+          <button
+            onClick={() => setVfOpen((v) => !v)}
+            className="w-full flex items-center justify-between"
+          >
+            <h2 className="text-lg font-bold text-slate-700">
+              💳 Visitas recurrentes{" "}
+              <span className="text-slate-400 font-medium">({vfCards.length})</span>
+            </h2>
+            <span className="text-slate-400 text-2xl leading-none">{vfOpen ? "▾" : "▸"}</span>
+          </button>
+          {vfOpen && (
+            <div className="mt-2">
+              {vfMsg && <p className="text-base text-red-600 mb-2">{vfMsg}</p>}
+              {vfCards.length === 0 ? (
+                <p className="text-slate-400 text-base bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+                  Sin tarjetas de visita recurrente en la colonia.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {vfCards.map((c) => (
+                    <li
+                      key={c.id}
+                      className="bg-white rounded-2xl p-3 ring-1 ring-slate-100 flex items-center gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-lg font-semibold text-slate-800 truncate">
+                          {c.nombre ?? "Visita"}
+                          {c.adentro && <span className="ml-2 text-emerald-600 text-sm font-bold">● adentro</span>}
+                        </p>
+                        <p className="text-base text-slate-500 truncate">
+                          <span className="font-bold text-slate-700">Casa {c.casa ?? "—"}</span>
+                          {" · tarjeta "}
+                          {{ solicitada: "en trámite", en_cola: "en impresión", impresa: "impresa", entregada: "entregada" }[c.estado] ?? c.estado}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => editarVf(c)}
+                        className="rounded-xl bg-slate-100 text-slate-700 text-base font-semibold px-3 py-2 hover:bg-slate-200 shrink-0"
+                        title="Corregir nombre"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        onClick={() => borrarVf(c)}
+                        className="rounded-xl bg-red-50 text-red-600 text-base font-semibold px-3 py-2 hover:bg-red-100 shrink-0"
+                        title="Revocar tarjeta"
+                      >
+                        🗑 Borrar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </section>
 
