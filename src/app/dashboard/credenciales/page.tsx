@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc, runOrError } from "@/lib/rpc";
+import { comprimirFoto } from "@/lib/draftGuardia";
 import AccesoPeatonal from "../_components/AccesoPeatonal";
 
 /**
@@ -766,6 +767,7 @@ function FirmaEntrega({
   const trazando = useRef(false);
   const [firmante, setFirmante] = useState(titular(sol));
   const [hayFirma, setHayFirma] = useState(false);
+  const [ineFile, setIneFile] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -827,14 +829,27 @@ function FirmaEntrega({
   const guardar = async () => {
     if (!sol.print_job_id) return setError("Esta tarjeta no tiene trabajo de impresión ligado.");
     if (!firmante.trim()) return setError("Escribe el nombre de quien recibe.");
+    if (!ineFile) return setError("Falta la foto del INE de quien recibe.");
     if (!hayFirma) return setError("Falta la firma del vecino.");
     setGuardando(true);
     setError(null);
+
+    // INE → bucket PRIVADO (identificación oficial: nunca URL pública).
+    // Si la foto no sube, NO se registra la entrega sin evidencia.
+    const foto = await comprimirFoto(ineFile);
+    const inePath = `${sol.id}/${crypto.randomUUID()}.jpg`;
+    const up = await supabaseBrowser.storage.from("vecino-ine").upload(inePath, foto);
+    if (up.error) {
+      setGuardando(false);
+      return setError("No se pudo subir la foto del INE. Revisa la conexión e inténtalo de nuevo.");
+    }
+
     const firma = canvasRef.current!.toDataURL("image/png");
     const res = await callRpc<{ delivered_at: string }>("entregar_tarjeta_firmada", {
       p_job: sol.print_job_id,
       p_firmante: firmante.trim(),
       p_firma_b64: firma,
+      p_ine_path: inePath,
     });
     setGuardando(false);
     if (!res.ok) return setError(res.error);
@@ -856,6 +871,19 @@ function FirmaEntrega({
           onChange={(e) => setFirmante(e.target.value)}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
+        <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
+          Foto del INE de quien recibe {ineFile && <span className="text-emerald-600 font-bold">✓ lista</span>}
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => setIneFile(e.target.files?.[0] ?? null)}
+          className="w-full text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:px-3 file:py-2 file:font-semibold"
+        />
+        <p className="text-[11px] text-slate-400 mt-1">
+          Registro oficial del responsable de la casa — se guarda en almacenamiento privado.
+        </p>
         <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
           Firma del vecino (con el dedo)
         </label>
