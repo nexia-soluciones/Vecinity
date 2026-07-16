@@ -7,6 +7,20 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Tarjetas: seriales RFID + entrega firmada + frentes por tipo — migr. 072-074 (2026-07-16) ✅
+
+- **072** `print_encolar_reimpresion`: reimprimir una tarjeta histórica (entregada sin job)
+  la re-encola con payload de `_payload_tarjeta`; guard anti-duplicado.
+- **073** `colonias.tarjeta_frente_visita_url`: frente por tipo (visita = diseño azul).
+  Diseños de Villa Catania en bucket público `vecino-tarjetas`.
+- **074** `card_inventory`: el paquete físico de tarjetas numeradas se registra EN ORDEN
+  (desde→hasta, asc o desc); al imprimir, `print_mark_job` asigna el serial de arriba y lo
+  liga a la solicitud, a `vehicles.tarjeta_rfid` y a `rfid_tags` (vehicular). `card_deliveries`:
+  "entregada" ahora exige **firma del vecino** (canvas en el teléfono del comité, RPC
+  `entregar_tarjeta_firmada`, fecha sellada por el servidor). UI: botón "Entregar con firma ✍︎"
+  en `/dashboard/credenciales`. Lote real Catania 14840505→14840409 (97) registrado.
+  ⚠ **Deploy EasyPanel pendiente** para que el comité vea el flujo de firma.
+
 ## Consola de operador de tarjetas — migración 071 (2026-07-15) ✅
 
 Las villas mandan sus tarjetas (comité aprueba → `vecino.print_jobs`) y **Nexia imprime
