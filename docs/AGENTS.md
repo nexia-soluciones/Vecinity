@@ -7,6 +7,15 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## QR de tarjetas resuelve — migr. 075 + rutas públicas (2026-07-16) ✅
+
+Las rutas `/vf/<card_id>` y `/r/<profile_id>` que codifica el QR de las tarjetas PVC ya
+existen (cerraba la Ola 3 del bridge). Privacidad en capas: **sin sesión** → solo
+VIGENTE/NO VÁLIDA + colonia vía `verificar_tarjeta_publico` (anon, CERO PII); **guardia/
+comité** → check completo (RPCs 052-053, que el escáner de `/vigilancia` ya reconocía).
+El bridge ahora codifica `https://vecinity.nexiasoluciones.com.mx` (antes vecinovigilante);
+la única visita impresa con URL vieja quedó re-encolada. ⚠ Requiere el deploy pendiente.
+
 ## Tarjetas: seriales RFID + entrega firmada + frentes por tipo — migr. 072-074 (2026-07-16) ✅
 
 - **072** `print_encolar_reimpresion`: reimprimir una tarjeta histórica (entregada sin job)
