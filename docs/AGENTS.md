@@ -7,6 +7,17 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Backfill RFID desde tags de campaña — migr. 081 (2026-07-16) ✅
+
+La campaña sí capturó tag↔vehículo en `rfid_tags` (115/120 con vehicle_id, 0 ambiguos) —
+solo faltaba copiarlo: backfill a `vehicles.tarjeta_rfid` (92 ligados) → **115/115
+vehiculares por entregar con serial conocido**. El modal de entrega pre-llena el número
+(sistema fijo > tag de campaña editable > manual). GOTCHA SQL: un SELECT en el mismo
+statement del UPDATE (CTE) no ve sus efectos — verificar con query aparte.
+⚠️ PENDIENTE (decisión de acceso): al entregar tarjeta NUEVA de un vehículo, el tag viejo
+sigue ACTIVO en el panel físico — la Orin solo reconcilia por mora, no procesa 'vencido'.
+Extender rfid_reconcile_plan con acción por reemplazo requiere Vibe Check (toca la pluma).
+
 ## Entrega liga RFID + paneles abatibles — migr. 080 (2026-07-16) ✅
 
 Las ~92 vehiculares históricas están impresas pero SIN serial registrado (solo las 23
