@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc, runOrError } from "@/lib/rpc";
 import AccesoPeatonal from "../_components/AccesoPeatonal";
@@ -28,6 +28,7 @@ type Solicitud = {
   pago_motivo_rechazo: string | null;
   motivo_rechazo: string | null;
   created_at: string;
+  print_job_id: string | null;
   vehicle: { placa: string } | null;
   beneficiario: { nombre: string } | null;
   beneficiario_nombre: string | null;
@@ -58,7 +59,7 @@ const ESTADO: Record<string, { label: string; cls: string }> = {
 
 const SOL_COLS = `id, tipo, estado, es_incluida, personalizada, costo, costo_estimado,
   pago_estado, comprobante_url, pago_motivo_rechazo, motivo_rechazo, created_at,
-  beneficiario_nombre,
+  print_job_id, beneficiario_nombre,
   vehicle:vehicles(placa),
   beneficiario:profiles!card_requests_beneficiario_profile_id_fkey(nombre)`;
 
@@ -309,14 +310,9 @@ export default function CredencialesPage() {
     await recargar();
   }
 
-  async function entregar(id: string) {
-    if (busy.has(id)) return;
-    conBusy(id, true);
-    const res = await callRpc("entregar_tarjeta", { p_request_id: id });
-    conBusy(id, false);
-    if (!res.ok) return setMsg(res.error);
-    await recargar();
-  }
+  // Entrega con firma: el vecino firma de recibido en este teléfono (la fecha
+  // la sella el servidor). Sustituye al "marcar entregada" sin evidencia.
+  const [entregaSol, setEntregaSol] = useState<Solicitud | null>(null);
 
   async function reintentar(id: string) {
     if (busy.has(id)) return;
@@ -726,11 +722,11 @@ export default function CredencialesPage() {
                         {s.house?.numero}
                       </p>
                       <button
-                        onClick={() => entregar(s.id)}
-                        disabled={busy.has(s.id)}
+                        onClick={() => setEntregaSol(s)}
+                        disabled={busy.has(s.id) || !s.print_job_id}
                         className="rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
                       >
-                        Marcar entregada
+                        Entregar con firma ✍︎
                       </button>
                     </li>
                   ))}
@@ -739,7 +735,165 @@ export default function CredencialesPage() {
             )}
           </>
         )}
+
+        {entregaSol && (
+          <FirmaEntrega
+            sol={entregaSol}
+            onClose={() => setEntregaSol(null)}
+            onDone={async () => {
+              setEntregaSol(null);
+              await recargar();
+            }}
+          />
+        )}
       </div>
     </main>
+  );
+}
+
+/** Modal de entrega: el vecino firma de recibido con el dedo. La fecha queda
+ *  sellada por el servidor (entregar_tarjeta_firmada). */
+function FirmaEntrega({
+  sol,
+  onClose,
+  onDone,
+}: {
+  sol: Solicitud;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const trazando = useRef(false);
+  const [firmante, setFirmante] = useState(titular(sol));
+  const [hayFirma, setHayFirma] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    c.width = c.offsetWidth * 2; // 2x para nitidez en pantallas retina
+    c.height = 320;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }, []);
+
+  const punto = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const c = canvasRef.current!;
+    const r = c.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) / r.width) * c.width,
+      y: ((e.clientY - r.top) / r.height) * c.height,
+    };
+  };
+
+  const empezar = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    trazando.current = true;
+    const p = punto(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  };
+  const mover = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!trazando.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const p = punto(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    setHayFirma(true);
+  };
+  const terminar = () => {
+    trazando.current = false;
+  };
+
+  const limpiar = () => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (!c || !ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    setHayFirma(false);
+  };
+
+  const guardar = async () => {
+    if (!sol.print_job_id) return setError("Esta tarjeta no tiene trabajo de impresión ligado.");
+    if (!firmante.trim()) return setError("Escribe el nombre de quien recibe.");
+    if (!hayFirma) return setError("Falta la firma del vecino.");
+    setGuardando(true);
+    setError(null);
+    const firma = canvasRef.current!.toDataURL("image/png");
+    const res = await callRpc<{ delivered_at: string }>("entregar_tarjeta_firmada", {
+      p_job: sol.print_job_id,
+      p_firmante: firmante.trim(),
+      p_firma_b64: firma,
+    });
+    setGuardando(false);
+    if (!res.ok) return setError(res.error);
+    onDone();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-end sm:items-center justify-center p-3">
+      <div className="bg-white rounded-2xl w-full max-w-md p-4 shadow-xl">
+        <h3 className="text-sm font-bold text-slate-800">
+          Entrega de tarjeta — {TIPO_EMOJI[sol.tipo]} {titular(sol)}
+          {sol.house?.numero ? ` · Casa ${sol.house.numero}` : ""}
+        </h3>
+        <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
+          Recibe (nombre completo)
+        </label>
+        <input
+          value={firmante}
+          onChange={(e) => setFirmante(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+        />
+        <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
+          Firma del vecino (con el dedo)
+        </label>
+        <canvas
+          ref={canvasRef}
+          onPointerDown={empezar}
+          onPointerMove={mover}
+          onPointerUp={terminar}
+          onPointerCancel={terminar}
+          className="w-full h-40 rounded-xl border border-slate-300 bg-white"
+          style={{ touchAction: "none" }}
+        />
+        {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={limpiar}
+            className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+          >
+            Limpiar
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={guardar}
+            disabled={guardando}
+            className="flex-1 rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
+          >
+            {guardando ? "Guardando…" : "Guardar entrega ✍︎"}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-2">
+          La fecha y hora de entrega las sella el servidor al guardar.
+        </p>
+      </div>
+    </div>
   );
 }
