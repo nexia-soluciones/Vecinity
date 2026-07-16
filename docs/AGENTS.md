@@ -7,6 +7,21 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Consola de operador de tarjetas — migración 071 (2026-07-15) ✅
+
+Las villas mandan sus tarjetas (comité aprueba → `vecino.print_jobs`) y **Nexia imprime
+centralizado** desde la consola del bridge (`nexia-print-bridge` → `localhost:7777/cola.html`),
+sin IA. La migración `071_print_operador.sql` agrega RPCs SOLO service_role para el bridge:
+- `print_take_selected(uuid[])` — tomar jobs seleccionados por el operador (acepta
+  `pendiente` y `error` — reintento directo sin pasar por `print_retry_job` del comité).
+- `print_reprint(uuid)` — registrar reimpresión de un job ya impreso (descuenta stock,
+  re-sella `printed_at`).
+- `print_set_stock(uuid,int)` — actualizar el stock físico de tarjetas de una colonia.
+El flujo del comité en `/dashboard/credenciales` NO cambia. Tarjeta BLANCA (vehicular
+`personalizada=false`) se marca lista sin pasar por la impresora.
+⚠️ Pendiente para impresión real: ninguna colonia tiene `tarjeta_frente_url` — subir el
+diseño de frente de cada villa.
+
 ## 🔮 Módulo futuro — Presencia sin cámaras por WiFi CSI (ESPectre) (2026-07-15) 📋 PLAN APROBADO, SIN EJECUTAR
 
 Plan de piloto aprobado por Juan; **bloqueado por hardware** (comprar 2× ESP32-C6 con antena
