@@ -311,10 +311,11 @@ export default function CredencialesPage() {
     await recargar();
   }
 
-  // Entrega con firma: el vecino firma de recibido en este teléfono (la fecha
-  // la sella el servidor). Sustituye al "marcar entregada" sin evidencia.
-  const [entregaSol, setEntregaSol] = useState<Solicitud | null>(null);
+  // Entrega con firma POR CASA: una firma + un INE cubren todas las tarjetas
+  // de la casa (la fecha la sella el servidor).
+  const [entregaSols, setEntregaSols] = useState<Solicitud[] | null>(null);
   const [entregasAbierto, setEntregasAbierto] = useState(false); // sección abatible
+  const [buscaCasa, setBuscaCasa] = useState("");
 
   async function reintentar(id: string) {
     if (busy.has(id)) return;
@@ -721,37 +722,71 @@ export default function CredencialesPage() {
                   </h2>
                   <span className="text-slate-400 text-lg leading-none">{entregasAbierto ? "▾" : "▸"}</span>
                 </button>
-                {entregasAbierto && (
-                <ul className="flex flex-col gap-2">
-                  {porEntregar.map((s) => (
-                    <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-800 truncate">
-                        {TIPO_EMOJI[s.tipo]} {titular(s)}
-                        {" · Casa "}
-                        {s.house?.numero}
-                      </p>
-                      <button
-                        onClick={() => setEntregaSol(s)}
-                        disabled={busy.has(s.id) || !s.print_job_id}
-                        className="rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
-                      >
-                        Entregar con firma ✍︎
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                )}
+                {entregasAbierto && (() => {
+                  const filtro = buscaCasa.trim().toLowerCase();
+                  const visibles = porEntregar.filter(
+                    (s) =>
+                      !filtro ||
+                      (s.house?.numero ?? "").toLowerCase().includes(filtro) ||
+                      titular(s).toLowerCase().includes(filtro)
+                  );
+                  const porCasa: Record<string, Solicitud[]> = {};
+                  for (const s of visibles) (porCasa[s.house?.numero ?? "—"] ||= []).push(s);
+                  return (
+                    <div>
+                      <input
+                        type="search"
+                        value={buscaCasa}
+                        onChange={(e) => setBuscaCasa(e.target.value)}
+                        placeholder="Buscar por casa, nombre o placa…"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-2"
+                      />
+                      {Object.keys(porCasa).length === 0 ? (
+                        <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+                          Ninguna casa coincide con la búsqueda.
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-2">
+                          {Object.entries(porCasa)
+                            .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true }))
+                            .map(([casa, sols]) => (
+                              <li key={casa} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-bold text-slate-800">
+                                    🏠 Casa {casa}{" "}
+                                    <span className="text-slate-400 font-medium">
+                                      ({sols.length} tarjeta{sols.length > 1 ? "s" : ""})
+                                    </span>
+                                  </p>
+                                  <button
+                                    onClick={() => setEntregaSols(sols)}
+                                    disabled={sols.every((s) => !s.print_job_id)}
+                                    className="rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
+                                  >
+                                    Entregar con firma ✍︎
+                                  </button>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1 truncate">
+                                  {sols.map((s) => `${TIPO_EMOJI[s.tipo]} ${titular(s)}`).join(" · ")}
+                                </p>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()}
               </section>
             )}
           </>
         )}
 
-        {entregaSol && (
+        {entregaSols && (
           <FirmaEntrega
-            sol={entregaSol}
-            onClose={() => setEntregaSol(null)}
+            sols={entregaSols}
+            onClose={() => setEntregaSols(null)}
             onDone={async () => {
-              setEntregaSol(null);
+              setEntregaSols(null);
               await recargar();
             }}
           />
@@ -761,47 +796,60 @@ export default function CredencialesPage() {
   );
 }
 
-/** Modal de entrega: el vecino firma de recibido con el dedo. La fecha queda
- *  sellada por el servidor (entregar_tarjeta_firmada). */
+/** Modal de entrega POR CASA: el vecino firma UNA vez, un INE, y todas las
+ *  tarjetas seleccionadas de la casa quedan entregadas (atómico, fecha del
+ *  servidor — entregar_tarjetas_firmadas). */
 function FirmaEntrega({
-  sol,
+  sols,
   onClose,
   onDone,
 }: {
-  sol: Solicitud;
+  sols: Solicitud[];
   onClose: () => void;
   onDone: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const trazando = useRef(false);
-  const [firmante, setFirmante] = useState(titular(sol));
+  const entregables = sols.filter((s) => s.print_job_id);
+  const [firmante, setFirmante] = useState(titular(sols[0]));
   const [hayFirma, setHayFirma] = useState(false);
   const [ineFile, setIneFile] = useState<File | null>(null);
-  const [serial, setSerial] = useState("");
-  const [serialSistema, setSerialSistema] = useState(false); // ya asignado al imprimir
+  const [sel, setSel] = useState<Set<string>>(new Set(entregables.map((s) => s.id)));
+  const [seriales, setSeriales] = useState<Record<string, string>>({});
+  const [serialFijo, setSerialFijo] = useState<Record<string, boolean>>({});
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const casa = sols[0]?.house?.numero;
 
-  // Prioridad del número de tarjeta: 1) serial asignado al imprimir (fijo);
-  // 2) tag de campaña ya ligado al vehículo (pre-llenado, editable — el comité
+  // Prioridad del número de tarjeta por cada una: 1) serial asignado al
+  // imprimir (fijo); 2) tag de campaña ligado al vehículo (editable — se
   // confirma contra la tarjeta física); 3) captura manual.
   useEffect(() => {
     (async () => {
-      if (!sol.print_job_id) return;
+      const jobIds = entregables.map((s) => s.print_job_id as string);
       const { data } = await supabaseBrowser
         .from("card_inventory")
-        .select("serial")
-        .eq("print_job_id", sol.print_job_id)
-        .maybeSingle();
-      const s = (data as unknown as { serial: string } | null)?.serial;
-      if (s) {
-        setSerial(s);
-        setSerialSistema(true);
-      } else if (sol.vehicle?.tarjeta_rfid) {
-        setSerial(sol.vehicle.tarjeta_rfid);
+        .select("serial, print_job_id")
+        .in("print_job_id", jobIds);
+      const porJob = new Map(
+        ((data as unknown as { serial: string; print_job_id: string }[]) ?? []).map((i) => [i.print_job_id, i.serial])
+      );
+      const ini: Record<string, string> = {};
+      const fijo: Record<string, boolean> = {};
+      for (const s of entregables) {
+        const inv = porJob.get(s.print_job_id as string);
+        if (inv) {
+          ini[s.id] = inv;
+          fijo[s.id] = true;
+        } else if (s.vehicle?.tarjeta_rfid) {
+          ini[s.id] = s.vehicle.tarjeta_rfid;
+        }
       }
+      setSeriales(ini);
+      setSerialFijo(fijo);
     })();
-  }, [sol.print_job_id, sol.vehicle?.tarjeta_rfid]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -859,7 +907,8 @@ function FirmaEntrega({
   };
 
   const guardar = async () => {
-    if (!sol.print_job_id) return setError("Esta tarjeta no tiene trabajo de impresión ligado.");
+    const elegidas = entregables.filter((s) => sel.has(s.id));
+    if (!elegidas.length) return setError("Selecciona al menos una tarjeta.");
     if (!firmante.trim()) return setError("Escribe el nombre de quien recibe.");
     if (!ineFile) return setError("Falta la foto del INE de quien recibe.");
     if (!hayFirma) return setError("Falta la firma del vecino.");
@@ -869,7 +918,7 @@ function FirmaEntrega({
     // INE → bucket PRIVADO (identificación oficial: nunca URL pública).
     // Si la foto no sube, NO se registra la entrega sin evidencia.
     const foto = await comprimirFoto(ineFile);
-    const inePath = `${sol.id}/${crypto.randomUUID()}.jpg`;
+    const inePath = `${elegidas[0].id}/${crypto.randomUUID()}.jpg`;
     const up = await supabaseBrowser.storage.from("vecino-ine").upload(inePath, foto);
     if (up.error) {
       setGuardando(false);
@@ -877,12 +926,17 @@ function FirmaEntrega({
     }
 
     const firma = canvasRef.current!.toDataURL("image/png");
-    const res = await callRpc<{ delivered_at: string }>("entregar_tarjeta_firmada", {
-      p_job: sol.print_job_id,
+    const serialsPorJob: Record<string, string> = {};
+    for (const s of elegidas) {
+      const v = (seriales[s.id] ?? "").trim();
+      if (v) serialsPorJob[s.print_job_id as string] = v;
+    }
+    const res = await callRpc<{ entregadas: number }>("entregar_tarjetas_firmadas", {
+      p_jobs: elegidas.map((s) => s.print_job_id),
       p_firmante: firmante.trim(),
       p_firma_b64: firma,
       p_ine_path: inePath,
-      p_serial: serial.trim() || null,
+      p_serials: serialsPorJob,
     });
     setGuardando(false);
     if (!res.ok) return setError(res.error);
@@ -893,36 +947,52 @@ function FirmaEntrega({
     <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-end sm:items-center justify-center p-3">
       <div className="bg-white rounded-2xl w-full max-w-md p-4 shadow-xl">
         <h3 className="text-sm font-bold text-slate-800">
-          Entrega de tarjeta — {TIPO_EMOJI[sol.tipo]} {titular(sol)}
-          {sol.house?.numero ? ` · Casa ${sol.house.numero}` : ""}
+          Entrega de tarjetas — 🏠 Casa {casa ?? "—"}{" "}
+          <span className="text-slate-400 font-medium">({entregables.length})</span>
         </h3>
+
+        <ul className="mt-3 flex flex-col gap-2 max-h-48 overflow-y-auto">
+          {entregables.map((s) => (
+            <li key={s.id} className="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
+              <input
+                type="checkbox"
+                checked={sel.has(s.id)}
+                onChange={(e) =>
+                  setSel((prev) => {
+                    const n = new Set(prev);
+                    if (e.target.checked) n.add(s.id);
+                    else n.delete(s.id);
+                    return n;
+                  })
+                }
+                className="w-4 h-4 accent-emerald-600 shrink-0"
+              />
+              <span className="text-sm font-semibold text-slate-800 truncate flex-1">
+                {TIPO_EMOJI[s.tipo]} {titular(s)}
+              </span>
+              {s.tipo === "vehicular" && (
+                <input
+                  value={seriales[s.id] ?? ""}
+                  onChange={(e) => setSeriales((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  readOnly={!!serialFijo[s.id]}
+                  inputMode="numeric"
+                  placeholder="N° tarjeta"
+                  title={serialFijo[s.id] ? "Serial asignado al imprimir" : "Confirma el número impreso en la tarjeta (liga el acceso de la puerta)"}
+                  className={`w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono ${serialFijo[s.id] ? "bg-slate-100 text-slate-500" : ""}`}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+
         <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
-          Recibe (nombre completo)
+          Recibe (nombre completo — responsable de la casa)
         </label>
         <input
           value={firmante}
           onChange={(e) => setFirmante(e.target.value)}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
-        {sol.tipo === "vehicular" && (
-          <>
-            <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
-              N° de tarjeta (serial RFID impreso en la tarjeta)
-              {serialSistema && <span className="text-emerald-600 font-bold"> ✓ asignado al imprimir</span>}
-            </label>
-            <input
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              readOnly={serialSistema}
-              inputMode="numeric"
-              placeholder="ej. 14840505"
-              className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono ${serialSistema ? "bg-slate-50 text-slate-500" : ""}`}
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Con este número la tarjeta queda ligada al acceso de la puerta (caseta).
-            </p>
-          </>
-        )}
         <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
           Foto del INE de quien recibe {ineFile && <span className="text-emerald-600 font-bold">✓ lista</span>}
         </label>
@@ -967,7 +1037,7 @@ function FirmaEntrega({
             disabled={guardando}
             className="flex-1 rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
           >
-            {guardando ? "Guardando…" : "Guardar entrega ✍︎"}
+            {guardando ? "Guardando…" : `Guardar entrega ✍︎ (${sel.size})`}
           </button>
         </div>
         <p className="text-[11px] text-slate-400 mt-2">
