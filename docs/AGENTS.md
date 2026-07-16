@@ -7,6 +7,14 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Entrega por casa + buscador — migr. 082 (2026-07-16) ✅
+
+`entregar_tarjetas_firmadas(uuid[],...)`: todas las tarjetas de la casa en UN acto (una
+firma + un INE, atómico; registro y serial por tarjeta, liga RFID por vehicular). UI:
+buscador por casa/nombre/placa; lista agrupada por casa; modal con checkbox y serial por
+tarjeta. QA rollback con 2 tarjetas de la misma casa. La RPC individual (080) queda vigente.
+⚠ Mismo deploy pendiente.
+
 ## Backfill RFID desde tags de campaña — migr. 081 (2026-07-16) ✅
 
 La campaña sí capturó tag↔vehículo en `rfid_tags` (115/120 con vehicle_id, 0 ambiguos) —
