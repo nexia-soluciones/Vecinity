@@ -7,6 +7,15 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Entrega con foto del INE — migr. 078 (2026-07-16) ✅
+
+El modal de entrega (tablet del comité) pide **foto del INE** de quien recibe + firma.
+INE = identificación oficial → bucket **PRIVADO** `vecino-ine` (policies insert/select solo
+authenticated), la entrega guarda la RUTA (`card_deliveries.ine_path`, signed URLs para
+consultarla); sin foto subida NO se registra la entrega. GOTCHA aplicado: param nuevo con
+DEFAULT en `entregar_tarjeta_firmada` → DROP de la firma vieja antes de recrear.
+⚠ Mismo deploy pendiente.
+
 ## Módulo visitas recurrentes en vigilancia — migr. 077 (2026-07-16) ✅
 
 Sección abatible "💳 Visitas recurrentes" en `/vigilancia`: tarjetas VF de la colonia con
