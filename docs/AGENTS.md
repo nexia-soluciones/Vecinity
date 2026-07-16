@@ -7,6 +7,14 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Reset de entregas fantasma — migr. 079 + re-encolado masivo (2026-07-16) ✅
+
+Las 96 tarjetas 'entregada' de la campaña vieja NO se habían entregado físicamente
+(card_deliveries vacía). `print_encolar_reimpresion` v2 resetea la solicitud a `en_cola`
+(delivered_at NULL, print_job_id nuevo) y se re-encolaron las 96 en prod. Estado real:
+96 en cola de impresión + 27 impresas por entregar + 15 en trámite; **0 entregadas** hasta
+que haya firma. Stock: 69 disponibles vs 96 en cola → registrar más tarjetas ("+ lote").
+
 ## Entrega con foto del INE — migr. 078 (2026-07-16) ✅
 
 El modal de entrega (tablet del comité) pide **foto del INE** de quien recibe + firma.
