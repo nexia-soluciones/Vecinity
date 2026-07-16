@@ -137,7 +137,10 @@ export default function VigilanciaPage() {
     rol: string | null;
     placas: string[];
     tarjeta_emitida: boolean;
+    cardId: string | null; // solo tarjetas de visita frecuente (/vf/<id>)
   } | null>(null);
+  // Si la tarjeta de visita frecuente ya tiene una visita ADENTRO, el botón cambia a salida.
+  const [vfAdentro, setVfAdentro] = useState<{ visitorId: string; desde: string | null } | null>(null);
   const [scanIne, setScanIne] = useState<File | null>(null);
   const [scanPlaca, setScanPlaca] = useState<File | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
@@ -361,11 +364,17 @@ export default function VigilanciaPage() {
         : await callRpc<typeof scanResidente>("verificar_tarjeta_visita", { p_card_id: id });
       if (!res.ok) return setScanMsg(res.error);
       setScanMsg(null);
-      const d = res.data as Omit<NonNullable<typeof scanResidente>, "placas" | "tarjeta_emitida"> & {
+      const d = res.data as Omit<NonNullable<typeof scanResidente>, "placas" | "tarjeta_emitida" | "cardId"> & {
         placas?: string[];
         tarjeta_emitida?: boolean;
       };
-      setScanResidente({ ...d, placas: d.placas ?? [], tarjeta_emitida: d.tarjeta_emitida ?? true });
+      setVfAdentro(null);
+      setScanResidente({
+        ...d,
+        placas: d.placas ?? [],
+        tarjeta_emitida: d.tarjeta_emitida ?? true,
+        cardId: esResidente ? null : id,
+      });
       return;
     }
 
@@ -385,6 +394,7 @@ export default function VigilanciaPage() {
   function abrirScan() {
     setScanVisit(null);
     setScanResidente(null);
+    setVfAdentro(null);
     setScanIne(null);
     setScanPlaca(null);
     setScanMsg(null);
@@ -396,6 +406,7 @@ export default function VigilanciaPage() {
     setScanOpen(false);
     setScanVisit(null);
     setScanResidente(null);
+    setVfAdentro(null);
     setScanIne(null);
     setScanPlaca(null);
     setScanMsg(null);
@@ -442,6 +453,43 @@ export default function VigilanciaPage() {
     setScanBusy(true);
     try {
       await supabaseBrowser.rpc("marcar_salida_visita", { p_id: scanVisit.id });
+      await Promise.all([cargarVisitas(), cargarHistorial()]);
+      cerrarScan();
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  // Entrada/salida de una VISITA FRECUENTE desde su tarjeta escaneada:
+  // crea el registro en visitors (mismo historial que cualquier visita).
+  async function entradaVfDesdeScan() {
+    if (!scanResidente?.cardId) return;
+    setScanBusy(true);
+    try {
+      const res = await callRpc<{
+        ok: boolean;
+        ya_adentro?: boolean;
+        visitor_id: string;
+        desde?: string | null;
+      }>("entrada_visita_frecuente", { p_card_id: scanResidente.cardId });
+      if (!res.ok) return setScanMsg(res.error);
+      if (res.data.ya_adentro) {
+        setVfAdentro({ visitorId: res.data.visitor_id, desde: res.data.desde ?? null });
+        setScanMsg("Esta tarjeta ya tiene una visita adentro — puedes marcar su salida.");
+        return;
+      }
+      await Promise.all([cargarVisitas(), cargarHistorial()]);
+      cerrarScan();
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  async function salidaVfDesdeScan() {
+    if (!vfAdentro) return;
+    setScanBusy(true);
+    try {
+      await supabaseBrowser.rpc("marcar_salida_visita", { p_id: vfAdentro.visitorId });
       await Promise.all([cargarVisitas(), cargarHistorial()]);
       cerrarScan();
     } finally {
@@ -1736,6 +1784,26 @@ export default function VigilanciaPage() {
                     )}
                   </>
                 )}
+                {scanResidente.valida &&
+                  scanResidente.cardId &&
+                  (vfAdentro ? (
+                    <button
+                      onClick={salidaVfDesdeScan}
+                      disabled={scanBusy}
+                      className="rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      {scanBusy ? "Registrando…" : "Marcar salida"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={entradaVfDesdeScan}
+                      disabled={scanBusy}
+                      className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+                    >
+                      {scanBusy ? "Registrando…" : "✓ Registrar entrada"}
+                    </button>
+                  ))}
+                {scanMsg && <p className="text-base text-red-600">{scanMsg}</p>}
                 <button
                   onClick={cerrarScan}
                   className="rounded-xl bg-slate-100 text-slate-600 text-base font-semibold py-2.5"
