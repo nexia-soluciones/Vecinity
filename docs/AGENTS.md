@@ -7,6 +7,14 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Entrada de visita frecuente con historial — migr. 076 (2026-07-16) ✅
+
+El guardia escanea la tarjeta `/vf/<id>` y "✓ Registrar entrada" crea la visita en
+`vecino.visitors` (columna nueva `card_request_id` la liga a la tarjeta) con los datos del
+titular — mismo historial y salida que cualquier visita. Doble escaneo = "ya adentro" →
+el botón cambia a "Marcar salida". RPC `entrada_visita_frecuente` (is_guard). QA con
+ROLLBACK simulando guardia real. ⚠ Mismo deploy pendiente.
+
 ## QR de tarjetas resuelve — migr. 075 + rutas públicas (2026-07-16) ✅
 
 Las rutas `/vf/<card_id>` y `/r/<profile_id>` que codifica el QR de las tarjetas PVC ya
