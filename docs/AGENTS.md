@@ -7,6 +7,13 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Edición del vigilante = proveedores recurrentes — migr. 083 (2026-07-16) ✅
+
+Corrección de alcance: el vigilante edita/da de baja **proveedores recurrentes**
+(`editar_proveedor`/`baja_proveedor`, is_guard, baja lógica que conserva historial), NO las
+tarjetas VF — ese módulo quedó solo consulta (REVOKE de vf_editar/vf_revocar a authenticated).
+Dato corregido en prod: proveedora casa 256 (capitalización). ⚠ Requiere deploy.
+
 ## Entrega por casa + buscador — migr. 082 (2026-07-16) ✅
 
 `entregar_tarjetas_firmadas(uuid[],...)`: todas las tarjetas de la casa en UN acto (una
