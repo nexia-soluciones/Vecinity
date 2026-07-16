@@ -314,6 +314,7 @@ export default function CredencialesPage() {
   // Entrega con firma: el vecino firma de recibido en este teléfono (la fecha
   // la sella el servidor). Sustituye al "marcar entregada" sin evidencia.
   const [entregaSol, setEntregaSol] = useState<Solicitud | null>(null);
+  const [entregasAbierto, setEntregasAbierto] = useState(false); // sección abatible
 
   async function reintentar(id: string) {
     if (busy.has(id)) return;
@@ -711,9 +712,16 @@ export default function CredencialesPage() {
 
             {porEntregar.length > 0 && (
               <section className="mt-6">
-                <h2 className="text-sm font-bold text-slate-700 mb-2">
-                  Impresas, por entregar <span className="text-slate-400 font-medium">({porEntregar.length})</span>
-                </h2>
+                <button
+                  onClick={() => setEntregasAbierto((v) => !v)}
+                  className="w-full flex items-center justify-between mb-2"
+                >
+                  <h2 className="text-sm font-bold text-slate-700">
+                    Impresas, por entregar <span className="text-slate-400 font-medium">({porEntregar.length})</span>
+                  </h2>
+                  <span className="text-slate-400 text-lg leading-none">{entregasAbierto ? "▾" : "▸"}</span>
+                </button>
+                {entregasAbierto && (
                 <ul className="flex flex-col gap-2">
                   {porEntregar.map((s) => (
                     <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100 flex items-center justify-between gap-2">
@@ -732,6 +740,7 @@ export default function CredencialesPage() {
                     </li>
                   ))}
                 </ul>
+                )}
               </section>
             )}
           </>
@@ -768,8 +777,28 @@ function FirmaEntrega({
   const [firmante, setFirmante] = useState(titular(sol));
   const [hayFirma, setHayFirma] = useState(false);
   const [ineFile, setIneFile] = useState<File | null>(null);
+  const [serial, setSerial] = useState("");
+  const [serialSistema, setSerialSistema] = useState(false); // ya asignado al imprimir
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Si el sistema asignó serial al imprimir, se muestra fijo; si la tarjeta es
+  // histórica (sin serial), el comité captura el número impreso en la tarjeta.
+  useEffect(() => {
+    (async () => {
+      if (!sol.print_job_id) return;
+      const { data } = await supabaseBrowser
+        .from("card_inventory")
+        .select("serial")
+        .eq("print_job_id", sol.print_job_id)
+        .maybeSingle();
+      const s = (data as unknown as { serial: string } | null)?.serial;
+      if (s) {
+        setSerial(s);
+        setSerialSistema(true);
+      }
+    })();
+  }, [sol.print_job_id]);
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -850,6 +879,7 @@ function FirmaEntrega({
       p_firmante: firmante.trim(),
       p_firma_b64: firma,
       p_ine_path: inePath,
+      p_serial: serial.trim() || null,
     });
     setGuardando(false);
     if (!res.ok) return setError(res.error);
@@ -871,6 +901,25 @@ function FirmaEntrega({
           onChange={(e) => setFirmante(e.target.value)}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
+        {sol.tipo === "vehicular" && (
+          <>
+            <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
+              N° de tarjeta (serial RFID impreso en la tarjeta)
+              {serialSistema && <span className="text-emerald-600 font-bold"> ✓ asignado al imprimir</span>}
+            </label>
+            <input
+              value={serial}
+              onChange={(e) => setSerial(e.target.value)}
+              readOnly={serialSistema}
+              inputMode="numeric"
+              placeholder="ej. 14840505"
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono ${serialSistema ? "bg-slate-50 text-slate-500" : ""}`}
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Con este número la tarjeta queda ligada al acceso de la puerta (caseta).
+            </p>
+          </>
+        )}
         <label className="block text-xs font-semibold text-slate-500 mt-3 mb-1">
           Foto del INE de quien recibe {ineFile && <span className="text-emerald-600 font-bold">✓ lista</span>}
         </label>

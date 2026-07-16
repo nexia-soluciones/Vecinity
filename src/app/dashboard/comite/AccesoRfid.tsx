@@ -66,6 +66,7 @@ const haceCuanto = (iso: string | null) => {
 };
 
 export default function AccesoRfid() {
+  const [abierto, setAbierto] = useState(false); // panel abatible
   const [data, setData] = useState<PanelData | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   // Edición de override por casa
@@ -216,7 +217,15 @@ export default function AccesoRfid() {
 
   return (
     <section className="mt-6">
-      <h2 className="text-sm font-bold text-slate-700 mb-2">Acceso RFID (caseta) 🚗</h2>
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        className="w-full flex items-center justify-between mb-2"
+      >
+        <h2 className="text-sm font-bold text-slate-700">Acceso RFID (caseta) 🚗</h2>
+        <span className="text-slate-400 text-lg leading-none">{abierto ? "▾" : "▸"}</span>
+      </button>
+      {abierto && (
+      <div>
 
       {/* Estado de la Orin */}
       <div
@@ -410,6 +419,8 @@ export default function AccesoRfid() {
             </ul>
           )}
         </div>
+      )}
+      </div>
       )}
     </section>
   );
