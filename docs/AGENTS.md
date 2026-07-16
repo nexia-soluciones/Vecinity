@@ -7,6 +7,14 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Módulo visitas recurrentes en vigilancia — migr. 077 (2026-07-16) ✅
+
+Sección abatible "💳 Visitas recurrentes" en `/vigilancia`: tarjetas VF de la colonia con
+nombre, casa, estado y ● adentro; el vigilante puede **editar** el nombre y **borrar**
+(revocar — la tarjeta deja de validar y su impresión pendiente se cancela). RPCs
+`vf_listar/vf_editar/vf_revocar` (is_guard) porque el RLS de `card_requests` solo deja
+leer a casa propia/comité. QA con ROLLBACK. ⚠ Mismo deploy pendiente.
+
 ## Entrada de visita frecuente con historial — migr. 076 (2026-07-16) ✅
 
 El guardia escanea la tarjeta `/vf/<id>` y "✓ Registrar entrada" crea la visita en
