@@ -30,7 +30,7 @@ type Solicitud = {
   motivo_rechazo: string | null;
   created_at: string;
   print_job_id: string | null;
-  vehicle: { placa: string } | null;
+  vehicle: { placa: string; tarjeta_rfid?: string | null } | null;
   beneficiario: { nombre: string } | null;
   beneficiario_nombre: string | null;
   house?: { numero: string } | null;
@@ -61,7 +61,7 @@ const ESTADO: Record<string, { label: string; cls: string }> = {
 const SOL_COLS = `id, tipo, estado, es_incluida, personalizada, costo, costo_estimado,
   pago_estado, comprobante_url, pago_motivo_rechazo, motivo_rechazo, created_at,
   print_job_id, beneficiario_nombre,
-  vehicle:vehicles(placa),
+  vehicle:vehicles(placa, tarjeta_rfid),
   beneficiario:profiles!card_requests_beneficiario_profile_id_fkey(nombre)`;
 
 const TIPO_EMOJI: Record<string, string> = { vehicular: "🚗", peatonal: "🚶", visita: "🧑‍🤝‍🧑" };
@@ -782,8 +782,9 @@ function FirmaEntrega({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Si el sistema asignó serial al imprimir, se muestra fijo; si la tarjeta es
-  // histórica (sin serial), el comité captura el número impreso en la tarjeta.
+  // Prioridad del número de tarjeta: 1) serial asignado al imprimir (fijo);
+  // 2) tag de campaña ya ligado al vehículo (pre-llenado, editable — el comité
+  // confirma contra la tarjeta física); 3) captura manual.
   useEffect(() => {
     (async () => {
       if (!sol.print_job_id) return;
@@ -796,9 +797,11 @@ function FirmaEntrega({
       if (s) {
         setSerial(s);
         setSerialSistema(true);
+      } else if (sol.vehicle?.tarjeta_rfid) {
+        setSerial(sol.vehicle.tarjeta_rfid);
       }
     })();
-  }, [sol.print_job_id]);
+  }, [sol.print_job_id, sol.vehicle?.tarjeta_rfid]);
 
   useEffect(() => {
     const c = canvasRef.current;
