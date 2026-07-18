@@ -1482,3 +1482,36 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   y no pinta nada hasta confirmar; el error de camera_view queda de respaldo.
   Verificado local: oculta en Aurora ✓, visible y EN VIVO en Catania ✓.
 - ⏳ Un deploy más de EasyPanel cuando convenga (cambio cosmético, sin prisa).
+
+## Sesión 2026-07-18 — El pago de tarjeta también resuelve el banco (migr. 088) ✅
+- **2º hueco de migr. 087 (Vibe Check Juan)**: el cobro de tarjetas de acceso corre en
+  PARALELO al de mantenimiento (`card_requests.pago_estado`) y nunca tocaba `bank_movs`.
+  Los depósitos $150/$300/$450/$600 (múltiplos de 150 **≤ $600**; la cuota de Catania es
+  **$750**) quedaban como "ingresos por conciliar" en `/conciliacion` y — peor — el comité
+  podía ligarlos por error a un abono de mantenimiento (**doble conteo**).
+- **Dato clave (Juan)**: todo pago de tarjeta es múltiplo de $150 y proporcional a los
+  carros de la casa → discriminador limpio contra la cuota de $750.
+- **Migr. 088** (`088_conciliar_pago_tarjeta.sql`, aplicada en prod vía /pg/query):
+  - `bank_movs.estado` += `'tarjeta'`; `card_requests.banco_hash` (liga; **NO único** →
+    soporta bundle $300 = 2 tarjetas de la misma casa).
+  - `_resolver_mov_tarjeta()` helper: marca la fila `tarjeta`; **guard** rechaza filas ya
+    `conciliado`/`gasto` (anti doble conteo); idempotente para el bundle.
+  - `validar_pago_tarjeta(…, p_banco_hash)` — aprueba el comprobante Y liga el banco.
+  - `marcar_mov_tarjeta(hash, card?)` — desde /conciliacion; ligar = aprueba el pago.
+  - `sugerir_banco_tarjeta(card)` — candidatos por monto exacto, prioriza casa en concepto,
+    solo múltiplos ≤$600 (descarta la cuota $750).
+- **UI ambas direcciones**:
+  - `/conciliacion`: ingreso múltiplo 150 ≤$600 → botón **"🎫 pago de tarjeta"** (sale de la lista).
+  - `/credenciales` "Comprobantes por validar": **"🔗 Buscar el depósito en el banco"** con
+    radios de candidatos (badge "casa ✓"); "Pago recibido ✓" liga el elegido.
+- **QA**: E2E en ROLLBACK simulando comité (JWT real): sugerir 15 candidatos ✓ · marcar →
+  banco `tarjeta`+`resuelto_id`, tarjeta `aprobado`+ligada ✓ · bundle 2ª tarjeta al mismo
+  depósito ✓ · guard bloquea fila `conciliado` ✓ · `npm run build` ✓.
+- **Limpieza de campaña (mismo día, con OK de Juan)**:
+  - (A) 34 depósitos de tarjeta pendientes ($7,200) → marcados `tarjeta`.
+  - (B) 12 doble conteo ($3,600): dinero de tarjeta acreditado como mantenimiento a 12
+    casas → abono de mantenimiento revertido (saldo restaurado) + fila del banco a `tarjeta`.
+  - (C) 57 tarjetas aprobadas sin `banco_hash` ($8,550) = adicionales de pago (la 1ª
+    vehicular por casa es gratis) aprobadas en campaña confiando en el comprobante, sin
+    fijar la fila del banco. De aquí en adelante se ligan solas.
+- Auto-deploy en push (no hay cola de EasyPanel en Vecinity).

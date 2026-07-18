@@ -43,6 +43,15 @@ type Job = {
   created_at: string;
   payload: { placa?: string; nombre?: string; casa?: string };
 };
+// Candidato del banco para ligar el pago de una tarjeta (RPC sugerir_banco_tarjeta, migr. 088)
+type CandBanco = {
+  banco_hash: string;
+  fecha: string;
+  monto: number;
+  concepto: string;
+  casa_ok: boolean | null;
+  pista: boolean;
+};
 type Colonia = {
   stock_tarjetas: number;
   precio_tarjeta_adicional: number;
@@ -110,6 +119,9 @@ export default function CredencialesPage() {
   // importar el estado de la tarjeta (una tarjeta ya impresa/entregada también
   // puede tener el pago sin validar; migr. 087).
   const [porValidar, setPorValidar] = useState<Solicitud[]>([]);
+  // Sugerencias del banco por solicitud + la fila elegida por el comité (migr. 088)
+  const [sugBanco, setSugBanco] = useState<Record<string, CandBanco[]>>({});
+  const [bancoSel, setBancoSel] = useState<Record<string, string>>({});
   const [porEntregar, setPorEntregar] = useState<Solicitud[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
 
@@ -296,10 +308,24 @@ export default function CredencialesPage() {
       p_id: s.id,
       p_aprobar: aprobar,
       p_nota: nota,
+      // Si el comité eligió la fila del banco, se liga y se marca 'tarjeta' (migr. 088)
+      p_banco_hash: aprobar ? bancoSel[s.id] ?? null : null,
     });
     conBusy(s.id, false);
     if (!res.ok) return setMsg(res.error);
     await recargar();
+  }
+
+  // Busca en el banco el depósito que pagó esta tarjeta (mismo monto, múltiplo ≤$600).
+  async function buscarBanco(s: Solicitud) {
+    if (busy.has(s.id)) return;
+    conBusy(s.id, true);
+    const res = await callRpc<CandBanco[]>("sugerir_banco_tarjeta", { p_card_id: s.id });
+    conBusy(s.id, false);
+    if (!res.ok) return setMsg(res.error);
+    const cands = res.data ?? [];
+    setSugBanco((m) => ({ ...m, [s.id]: cands }));
+    if (cands.length > 0) setBancoSel((m) => ({ ...m, [s.id]: cands[0].banco_hash }));
   }
 
   async function cancelar(id: string) {
@@ -638,6 +664,69 @@ export default function CredencialesPage() {
                           Ver comprobante
                         </a>
                       )}
+
+                      {/* Ligar el depósito del banco (migr. 088): al aprobar, esa fila
+                          sale de "ingresos por conciliar" y no se cuenta como mantenimiento. */}
+                      {sugBanco[s.id] === undefined ? (
+                        <button
+                          onClick={() => buscarBanco(s)}
+                          disabled={busy.has(s.id)}
+                          className="mt-2 text-xs font-semibold text-brand-600 underline underline-offset-2 disabled:opacity-40"
+                        >
+                          🔗 Buscar el depósito en el banco
+                        </button>
+                      ) : sugBanco[s.id].length === 0 ? (
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          No encontré un depósito de {mxn(s.costo_estimado)} sin conciliar en el banco.
+                          Puedes aprobar el pago igual (solo con el comprobante).
+                        </p>
+                      ) : (
+                        <div className="mt-2 rounded-xl bg-brand-50/60 ring-1 ring-brand-100 p-2">
+                          <p className="text-[11px] font-semibold text-brand-700 mb-1">
+                            Depósito del banco a ligar (elige el correcto):
+                          </p>
+                          <ul className="flex flex-col gap-1 max-h-44 overflow-y-auto">
+                            {sugBanco[s.id].slice(0, 8).map((c) => (
+                              <li key={c.banco_hash}>
+                                <label className="flex items-start gap-2 cursor-pointer rounded-lg px-1.5 py-1 hover:bg-white">
+                                  <input
+                                    type="radio"
+                                    name={`banco-${s.id}`}
+                                    checked={bancoSel[s.id] === c.banco_hash}
+                                    onChange={() => setBancoSel((m) => ({ ...m, [s.id]: c.banco_hash }))}
+                                    className="mt-0.5 accent-brand-500"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="text-[11px] font-semibold text-slate-700">
+                                      {c.fecha} · {mxn(c.monto)}
+                                    </span>
+                                    {c.casa_ok && (
+                                      <span className="ml-1 text-[10px] font-semibold text-emerald-700">casa ✓</span>
+                                    )}
+                                    <span className="block text-[10px] text-slate-500 truncate" title={c.concepto}>
+                                      {c.concepto}
+                                    </span>
+                                  </span>
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            onClick={() => {
+                              setSugBanco((m) => ({ ...m, [s.id]: undefined as unknown as CandBanco[] }));
+                              setBancoSel((m) => {
+                                const n = { ...m };
+                                delete n[s.id];
+                                return n;
+                              });
+                            }}
+                            className="mt-1 text-[10px] text-slate-400 underline hover:text-slate-600"
+                          >
+                            aprobar sin ligar banco
+                          </button>
+                        </div>
+                      )}
+
                       <div className="flex gap-2 mt-2.5">
                         <button
                           onClick={() => validarPago(s, true)}

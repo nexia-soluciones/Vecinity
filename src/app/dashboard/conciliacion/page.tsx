@@ -472,6 +472,19 @@ export default function ConciliacionPage() {
     await cargarCobertura();
   }
 
+  // El pago de tarjetas de acceso corre APARTE del mantenimiento (card_requests,
+  // migr. 088): un ingreso de $150/$300/$450/$600 (múltiplo de 150 ≤ $600; la
+  // cuota es $750) es una tarjeta, no un abono. Marcarlo lo saca de "ingresos por
+  // conciliar" y lo blinda contra ligarse por error a mantenimiento (doble conteo).
+  async function marcarPagoTarjeta(hash: string) {
+    const { error } = await supabaseBrowser.rpc("marcar_mov_tarjeta", {
+      p_banco_hash: hash,
+    });
+    if (error) return setFileMsg(`No se pudo marcar como tarjeta: ${error.message}`);
+    setIngresos((l) => l.filter((r) => r.hash !== hash));
+    await cargarCobertura();
+  }
+
   // Importa los CARGOS seleccionados como gastos de la colonia. Los recurrentes
   // conocidos (jardinería, alberca, basura…) se clasifican solos; el resto queda
   // en la bandeja "sin clasificar" de /dashboard/gastos para ponerles razón.
@@ -954,10 +967,22 @@ export default function ConciliacionPage() {
                           {r.estado === "error" && (
                             <span className="text-[10px] font-semibold text-red-600">{r.errorMsg}</span>
                           )}
+                          {(r.estado === "" || r.estado === "error") &&
+                            r.monto > 0 && r.monto <= 600 && r.monto % 150 === 0 && (
+                              <button
+                                onClick={() => marcarPagoTarjeta(r.hash)}
+                                className="ml-auto text-[10px] font-semibold text-brand-600 bg-brand-50 rounded-full px-2 py-0.5 hover:bg-brand-100"
+                                title="Es el pago de una tarjeta de acceso (no mantenimiento). Lo saca de aquí y evita contarlo doble."
+                              >
+                                🎫 pago de tarjeta
+                              </button>
+                            )}
                           {(r.estado === "" || r.estado === "error") && (
                             <button
                               onClick={() => descartarMov(r.hash, "ingreso")}
-                              className="ml-auto text-[10px] text-slate-400 underline hover:text-slate-600"
+                              className={`text-[10px] text-slate-400 underline hover:text-slate-600 ${
+                                r.monto > 0 && r.monto <= 600 && r.monto % 150 === 0 ? "" : "ml-auto"
+                              }`}
                               title="No es un pago de vecino (traspaso, interés…) — sácalo de pendientes"
                             >
                               descartar
