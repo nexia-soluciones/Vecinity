@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { callRpc } from "@/lib/rpc";
 import { leerComprobante } from "./actions";
@@ -74,6 +74,7 @@ export default function PagosPage() {
 
   const [monto, setMonto] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -285,6 +286,9 @@ export default function PagosPage() {
       }
       setMonto("");
       setFile(null);
+      // El <input type="file"> es no-controlado: setFile(null) no limpia lo que
+      // muestra el navegador → hay que resetear el input nativo a mano.
+      if (fileRef.current) fileRef.current.value = "";
       if (houseId) await cargarMovs(houseId);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error al registrar el abono.");
@@ -519,6 +523,7 @@ export default function PagosPage() {
           <label className="text-xs text-slate-500">
             Comprobante (foto del recibo / transferencia)
             <input
+              ref={fileRef}
               type="file"
               accept="image/*"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -535,7 +540,7 @@ export default function PagosPage() {
           )}
           <button
             onClick={registrar}
-            disabled={enviando}
+            disabled={enviando || !(parseFloat(monto) > 0)}
             className="rounded-2xl bg-gradient-to-br from-brand-500 to-emerald-600 text-white py-3.5 font-extrabold shadow-lg disabled:opacity-40 active:scale-[0.99] transition"
           >
             {enviando ? "Enviando…" : "Enviar abono"}

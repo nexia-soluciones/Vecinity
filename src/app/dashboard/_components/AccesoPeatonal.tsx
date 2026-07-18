@@ -126,12 +126,22 @@ export default function AccesoPeatonal({ houseId }: { houseId: string }) {
     await cargar();
   }
 
-  async function retirar(id: string) {
+  async function retirar(r: Registro) {
     if (busy) return;
+    // Si ya está activa en la puerta, confirmar: borrarla la quita también del panel.
+    const activa = r.status === "enrolada" || r.status === "aprobada";
+    if (activa && !window.confirm(`¿Borrar a ${r.nombre}? También se quitará de la puerta.`)) return;
     setBusy(true);
-    const res = await callRpc("face_retire", { p_id: id });
+    const res = await callRpc<{ ok: boolean; pendiente_borrado?: boolean }>("face_retire", {
+      p_id: r.id,
+    });
     setBusy(false);
     if (!res.ok) return setMsg(res.error);
+    setMsg(
+      res.data?.pendiente_borrado
+        ? `${r.nombre} se quitará de la puerta en unos minutos.`
+        : `${r.nombre} se borró del registro.`
+    );
     await cargar();
   }
 
@@ -232,15 +242,13 @@ export default function AccesoPeatonal({ houseId }: { houseId: string }) {
                     <button onClick={() => verFoto(r.id)} className="text-xs font-semibold text-slate-500">
                       {fotoDe[r.id] ? "Ocultar foto" : "Ver foto"}
                     </button>
-                    {(r.status === "recibida" || r.status === "rechazada") && (
-                      <button
-                        onClick={() => retirar(r.id)}
-                        disabled={busy}
-                        className="text-xs font-semibold text-red-500 disabled:opacity-40"
-                      >
-                        Quitar
-                      </button>
-                    )}
+                    <button
+                      onClick={() => retirar(r)}
+                      disabled={busy}
+                      className="text-xs font-semibold text-red-500 disabled:opacity-40"
+                    >
+                      Borrar
+                    </button>
                   </div>
                   {fotoDe[r.id] && (
                     /* eslint-disable-next-line @next/next/no-img-element */

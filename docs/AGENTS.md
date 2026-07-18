@@ -2,10 +2,32 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-15
+> Última actualización: 2026-07-17
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Comprobante robusto + borrar rostro por casa + enroll fallido amigable — migr. 084-086 (2026-07-17) ✅
+
+Tres mejoras pedidas por el Director. ⚠ Requiere deploy (cambios de cliente).
+
+- **084 — comprobante (`registrar_abono`):** al re-subir la MISMA imagen, el mensaje ahora
+  dice *"…y está en proceso de liberación (el comité lo revisará)"* (o *"ya fue aprobado"* según
+  el estado real), en vez de solo fecha+casa. Cliente `pagos/page.tsx`: botón **deshabilitado sin
+  monto válido** + **reset del `<input type=file>` nativo** vía `ref` (setFile(null) no lo limpia
+  solo → antes la imagen "se quedaba" tras enviar).
+- **085 — borrar rostro por casa (`face_retire`):** el vecino ahora puede borrar CUALQUIER rostro
+  **de su casa** en cualquier estado (antes solo `recibida`/`rechazada`). La baja física la sigue
+  ejecutando el poller de la Orin (plan `remove`, registro `retirada` + `terminal_removed_at NULL`).
+  UI `_components/AccesoPeatonal.tsx`: botón **"Borrar"** en todos los estados, `window.confirm` si
+  está `enrolada`, aviso *"se quitará de la puerta en unos minutos"* si `pendiente_borrado`.
+- **086 — enroll fallido amigable (`face_mark` acción `'error'`):** cuando la terminal no reconoce
+  el rostro (Hikvision FDLib **statusCode 6** = calidad/rostro no detectado), la Orin debe llamar
+  `face_mark(<token>, <id>, 'error')` → el registro vuelve a **`rechazada`** con motivo amigable
+  (la app ya lo muestra con *"toma otra foto y vuelve a enviarla"*) y **Caty avisa por Telegram**
+  al vecino con chat ligado (*"mejora la iluminación, foto de frente…"*).
+  🔧 **PENDIENTE EN LA ORIN (fuera de este repo):** mapear el statusCode 6 (y códigos de calidad
+  afines) → `face_mark(...,'error',...)` en vez de solo tirar el error crudo al Telegram del comité.
 
 ## Edición del vigilante = proveedores recurrentes — migr. 083 (2026-07-16) ✅
 
