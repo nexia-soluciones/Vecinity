@@ -106,6 +106,10 @@ export default function CredencialesPage() {
   const [colonia, setColonia] = useState<Colonia | null>(null);
   const [coloniaId, setColoniaId] = useState<string | null>(null);
   const [pendientes, setPendientes] = useState<Solicitud[]>([]);
+  // Comprobantes de pago por validar — TODOS los pago_estado='en_revision', sin
+  // importar el estado de la tarjeta (una tarjeta ya impresa/entregada también
+  // puede tener el pago sin validar; migr. 087).
+  const [porValidar, setPorValidar] = useState<Solicitud[]>([]);
   const [porEntregar, setPorEntregar] = useState<Solicitud[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
 
@@ -153,7 +157,7 @@ export default function CredencialesPage() {
   }, []);
 
   const cargarComite = useCallback(async (cid: string) => {
-    const [col, pend, entr, jbs] = await Promise.all([
+    const [col, pend, valid, entr, jbs] = await Promise.all([
       supabaseBrowser
         .from("colonias")
         .select("stock_tarjetas, precio_tarjeta_adicional, precio_personalizacion")
@@ -163,6 +167,15 @@ export default function CredencialesPage() {
         .from("card_requests")
         .select(`${SOL_COLS}, house:houses(numero)`)
         .eq("estado", "solicitada")
+        .order("created_at"),
+      // Comprobantes por validar: cualquier tarjeta con el pago en revisión
+      // (incluye impresas/entregadas cuyo pago quedó sin validar en campaña).
+      supabaseBrowser
+        .from("card_requests")
+        .select(`${SOL_COLS}, house:houses(numero)`)
+        .eq("colonia_id", cid)
+        .eq("pago_estado", "en_revision")
+        .not("estado", "in", "(cancelada,rechazada)")
         .order("created_at"),
       supabaseBrowser
         .from("card_requests")
@@ -177,6 +190,7 @@ export default function CredencialesPage() {
     ]);
     setColonia((col.data as unknown as Colonia) ?? null);
     setPendientes((pend.data as unknown as Solicitud[]) ?? []);
+    setPorValidar((valid.data as unknown as Solicitud[]) ?? []);
     setPorEntregar((entr.data as unknown as Solicitud[]) ?? []);
     setJobs((jbs.data as unknown as Job[]) ?? []);
   }, []);
@@ -504,8 +518,7 @@ export default function CredencialesPage() {
                       </button>
                     )}
                   </div>
-                  {s.estado === "solicitada" &&
-                    (s.pago_estado === "pendiente" || s.pago_estado === "rechazado") && (
+                  {(s.pago_estado === "pendiente" || s.pago_estado === "rechazado") && (
                       <div className="mt-2 border-t border-slate-100 pt-2">
                         {s.pago_estado === "rechazado" && s.pago_motivo_rechazo && (
                           <p className="text-xs text-red-600 mb-1.5">
@@ -513,8 +526,9 @@ export default function CredencialesPage() {
                           </p>
                         )}
                         <p className="text-xs text-slate-500 mb-1.5">
-                          Transfiere {mxn(s.costo_estimado)} a la cuenta de la colonia (la misma del
-                          mantenimiento) y sube tu comprobante:
+                          {s.estado === "impresa" || s.estado === "entregada"
+                            ? `Tu tarjeta ya está lista, solo falta registrar el pago. Transfiere ${mxn(s.costo_estimado)} a la cuenta de la colonia (la misma del mantenimiento) y sube tu comprobante:`
+                            : `Transfiere ${mxn(s.costo_estimado)} a la cuenta de la colonia (la misma del mantenimiento) y sube tu comprobante:`}
                         </p>
                         <label className="inline-block rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-2 hover:bg-brand-600 cursor-pointer">
                           {busy.has(s.id) ? "Subiendo…" : "📎 Subir comprobante"}
@@ -590,6 +604,62 @@ export default function CredencialesPage() {
               )}
             </section>
 
+            {/* Comprobantes de pago por validar (cualquier estado de la tarjeta) */}
+            <section className="mt-6">
+              <h2 className="text-sm font-bold text-slate-700 mb-2">
+                Comprobantes por validar{" "}
+                <span className="text-slate-400 font-medium">({porValidar.length})</span>
+              </h2>
+              {porValidar.length === 0 ? (
+                <p className="text-slate-400 text-sm bg-white rounded-2xl p-4 ring-1 ring-slate-100">
+                  No hay comprobantes por validar 🎉
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {porValidar.map((s) => (
+                    <li key={s.id} className="bg-white rounded-2xl p-3.5 ring-1 ring-slate-100">
+                      <p className="font-semibold text-slate-800">
+                        {TIPO_EMOJI[s.tipo]} {titular(s)} · Casa {s.house?.numero}
+                        {s.personalizada && <span className="ml-1">🎨</span>}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Pago de {mxn(s.costo_estimado)} ·{" "}
+                        <span className="font-medium">
+                          tarjeta: {ESTADO[s.estado]?.label ?? s.estado}
+                        </span>
+                      </p>
+                      {s.comprobante_url && (
+                        <a
+                          href={s.comprobante_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-1 text-xs font-semibold text-brand-600 underline underline-offset-2"
+                        >
+                          Ver comprobante
+                        </a>
+                      )}
+                      <div className="flex gap-2 mt-2.5">
+                        <button
+                          onClick={() => validarPago(s, true)}
+                          disabled={busy.has(s.id)}
+                          className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
+                        >
+                          {busy.has(s.id) ? "…" : "Pago recibido ✓"}
+                        </button>
+                        <button
+                          onClick={() => validarPago(s, false)}
+                          disabled={busy.has(s.id)}
+                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        >
+                          Rechazar pago
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
             <section className="mt-6">
               <h2 className="text-sm font-bold text-slate-700 mb-2">
                 Solicitudes por aprobar <span className="text-slate-400 font-medium">({pendientes.length})</span>
@@ -632,42 +702,29 @@ export default function CredencialesPage() {
                             )}
                           </p>
                         )}
-                        {s.pago_estado === "en_revision" ? (
-                          <div className="flex gap-2 mt-2.5">
-                            <button
-                              onClick={() => validarPago(s, true)}
-                              disabled={busy.has(s.id)}
-                              className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
-                            >
-                              {busy.has(s.id) ? "…" : "Pago recibido ✓"}
-                            </button>
-                            <button
-                              onClick={() => validarPago(s, false)}
-                              disabled={busy.has(s.id)}
-                              className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
-                            >
-                              Rechazar pago
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2 mt-2.5">
-                            <button
-                              onClick={() => resolver(s, "aprobar")}
-                              disabled={busy.has(s.id) || !pagoListo}
-                              title={pagoListo ? "" : "Falta que el vecino pague y el comité valide el comprobante"}
-                              className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
-                            >
-                              {busy.has(s.id) ? "…" : pagoListo ? "Aprobar e imprimir" : "Esperando pago del vecino"}
-                            </button>
-                            <button
-                              onClick={() => resolver(s, "rechazar")}
-                              disabled={busy.has(s.id)}
-                              className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
-                            >
-                              Rechazar
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex gap-2 mt-2.5">
+                          <button
+                            onClick={() => resolver(s, "aprobar")}
+                            disabled={busy.has(s.id) || !pagoListo}
+                            title={pagoListo ? "" : "Falta validar el comprobante en «Comprobantes por validar» ↑"}
+                            className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                          >
+                            {busy.has(s.id)
+                              ? "…"
+                              : pagoListo
+                                ? "Aprobar e imprimir"
+                                : s.pago_estado === "en_revision"
+                                  ? "Valida el comprobante primero ↑"
+                                  : "Esperando pago del vecino"}
+                          </button>
+                          <button
+                            onClick={() => resolver(s, "rechazar")}
+                            disabled={busy.has(s.id)}
+                            className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
                       </li>
                     );
                   })}

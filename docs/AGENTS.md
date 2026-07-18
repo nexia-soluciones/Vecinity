@@ -7,6 +7,40 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Pago de tarjeta desacoplado del estado de la tarjeta — migr. 087 (2026-07-17) ✅ ⚠ deploy
+
+Reporte de campo (Director): "varios vecinos subieron el comprobante de su tarjeta y sigue
+en revisión". **Causa raíz:** el pago (migr. 061) se validaba SOLO en la lista del comité
+`estado='solicitada'`. En la campaña muchas tarjetas se imprimieron/entregaron ANTES de
+validar el pago → al salir de `solicitada` el comprobante `en_revision` quedaba huérfano
+(el comité no tenía dónde aprobarlo) y el vecino con tarjeta ya impresa tampoco podía subir
+comprobante (la RPC exigía `estado='solicitada'`).
+
+**Fix (3 partes):**
+- **BD `subir_comprobante_tarjeta` (087):** acepta comprobante mientras `pago_estado IN
+  (pendiente,rechazado)` y `estado NOT IN (cancelada,rechazada)` — cualquier punto vivo del
+  ciclo. `validar_pago_tarjeta` ya operaba con cualquier estado → sin cambio.
+- **UI comité `credenciales/page.tsx`:** nueva sección **"Comprobantes por validar"** que
+  lista TODO `pago_estado='en_revision'` (query por `pago_estado`, no por `estado`), con
+  "Pago recibido ✓ / Rechazar". Se quitó el botón de validar inline de "Solicitudes por
+  aprobar" (vivía solo ahí) para no duplicar; ese botón ahora dice "Valida el comprobante
+  primero ↑" cuando el pago sigue en revisión.
+- **UI vecino:** el botón "Subir comprobante" aparece con `pago_estado` pendiente/rechazado
+  aunque la tarjeta ya esté impresa/entregada.
+
+**Conciliación de campaña (2026-07-17, backfill vía /pg/query):** crucé los 20 comprobantes
+atorados (impresa/entregada) contra `bank_movs` (el concepto del banco trae casa/placa).
+**16 aprobadas** (13 con match exacto casa/placa + 3 de casa 150 por depósito $450 "3 accesos"
+confirmado por el Director), `pago_motivo_rechazo` usado como nota de auditoría. Quedan
+`en_revision` sin match claro: casa 105 (176732), 132 (JJC518A, además duplicada de una
+cancelada) y 148 (GGM282-E + Selenne visita) → esperan comprobante/aclaración. Casas 238 (3)
+y 107 (2) llegaron como `solicitada` — 238 confirmada en banco, 107 sin match aún.
+
+**Hueco pendiente (2º del mismo diseño):** el pago de tarjeta NO toca `bank_movs` (a diferencia
+del mantenimiento) → esos depósitos de $150/$300/$450 quedan como "ingresos sin conciliar" en
+Pagos y estorban al comité. Falta que aprobar el pago concilie/descarte también la fila del
+banco. Requiere Vibe Check.
+
 ## Comprobante robusto + borrar rostro por casa + enroll fallido amigable — migr. 084-086 (2026-07-17) ✅
 
 Tres mejoras pedidas por el Director. ⚠ Requiere deploy (cambios de cliente).
