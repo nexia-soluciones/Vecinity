@@ -1515,3 +1515,15 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
     vehicular por casa es gratis) aprobadas en campaña confiando en el comprobante, sin
     fijar la fila del banco. De aquí en adelante se ligan solas.
 - Auto-deploy en push (no hay cola de EasyPanel en Vecinity).
+
+### Adenda 2026-07-18 — Reversa de entrega firmada errónea (casa 130) ✅
+- **Pedido (Juan)**: un vecino firmó una entrega que no era su casa → borrar el registro de
+  entrega de casa 130. No hay RPC de reversa; corrección manual vía /pg/query (transacción).
+- Un solo evento de entrega (firma "GMX-846-F", 2026-07-17 19:44) cubría **2 tarjetas
+  vehiculares** de casa 130 (placas GMX-846-F / GMB-585-D, serials 14840470 / 14840476).
+- **Reversa**: borrados los 2 `card_deliveries`; las 2 `card_requests` de vuelta a `impresa`
+  (`delivered_at=NULL`) → reaparecen en "Por entregar" para re-firmar. **RFID conservado**
+  (los serials son de casa 130; las tarjetas no se reimprimen — decisión de Juan).
+- Cómo revertir una entrega firmada (para futuro): la entrega hace DELETE-inverso de
+  (1) fila `card_deliveries`, (2) `card_requests.estado` entregada→impresa + delivered_at NULL,
+  (3) opcional desligar `vehicles.tarjeta_rfid` + `rfid_tags` (aquí NO, se conservó).
