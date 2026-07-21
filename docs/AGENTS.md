@@ -1527,3 +1527,31 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - Cómo revertir una entrega firmada (para futuro): la entrega hace DELETE-inverso de
   (1) fila `card_deliveries`, (2) `card_requests.estado` entregada→impresa + delivered_at NULL,
   (3) opcional desligar `vehicles.tarjeta_rfid` + `rfid_tags` (aquí NO, se conservó).
+
+### Adenda 2026-07-21 — Reimprimir REEMPLAZA la tarjeta (migr. 089) ✅
+- **Bug (Juan, casa 161 · placa W06BGK)**: al reimprimir, la consola siguió reportando el
+  serial VIEJO (14840479). `print_reprint` solo movía `printed_at` y el stock: no gastaba
+  serial del inventario ni tocaba el RFID. Resultado peligroso — la tarjeta vieja seguía
+  `activo` y **enrolada en el DS-K2812 (seguía abriendo la pluma)** y la nueva que salió de
+  la impresora (14840450) ni siquiera existía en BD → **no abría**. Exactamente al revés.
+- **`print_reprint` v2 (migr. 089)**, atómica: toma el siguiente serial disponible del
+  paquete → el anterior a `card_inventory.estado='reemplazada'` y su tag a `status='baja',
+  motivo='reemplazo'` → `vehicles.tarjeta_rfid` = nuevo → upsert del tag nuevo `activo` con
+  `enrolled_at=NULL` (el reconcile de la Orin lo da de alta). Devuelve `{serial, serial_anterior}`.
+  - `tag_status` ganó el valor `baja` (enum). **Gotcha PG**: un valor de enum recién creado
+    NO se puede usar en la misma transacción → el `ALTER TYPE` va en tanda aparte.
+  - Índice único parcial `card_inventory (print_job_id) WHERE estado='asignada'`: un job
+    reimpreso tiene N filas, pero **una sola vigente**. Quien lea "el serial del job" DEBE
+    filtrar `estado='asignada'` (se corrigió `serialDeJob` en la consola del bridge).
+  - **Guarda**: si el job ya tiene entrega firmada, la reimpresión se rechaza y manda a
+    "Re-encolar" (la tarjeta nueva necesita su propia firma; ver migr. 079).
+- **Baja en el fierro** (`nexia-access-bridge/sql/rfid_baja.sql`): el plan emite `revoke`
+  (primero, antes del `enroll`) para tags en `baja` que el panel aún conoce; `rfid_mark`
+  acepta `revoke` y pone `enrolled_at=NULL` (marcador de aplicado, espejo del enroll).
+  Una baja **nunca revive**: la rama `reactivate` solo toca motivos `mora|manual`.
+  El poller anula con `suspend` (el SDK no borra tarjetas; la vigencia vencida niega el paso).
+- **Reparación casa 161 aplicada**: 14840479 → `reemplazada` + tag `baja` (el poller la
+  anulará en el panel); 14840450 → `asignada` al job, vehículo y tag `activo` sin enrolar.
+- QA en ROLLBACK: reparación ✓ · plan emite `revoke`+`enroll` en ese orden ✓ · segunda
+  reimpresión rota a 14840449 y mata la 14840450 ✓ · bajas solo reciben `revoke` ✓ ·
+  guarda de entregada-firmada bloquea ✓ (probada contra un job real de los 74 entregados).
