@@ -1650,3 +1650,17 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   **presionado**, con el botón hundido), del panel del comité (verde y ámbar lado a lado, se
   ven parejos) y de /dashboard/acceso (verde, rojo y claros juntos). Cuenta de comité temporal
   de la villa DEMO borrada al terminar (perfil, aceptación de aviso y usuario de auth).
+
+### Adenda 2026-07-22 (3) — Cierre de sesión
+- **Casa 186 (en sitio, pedido de Juan)**: `CAT-186` reactivado con la RPC nueva (vigente al
+  21-ago) **y** enlace de contraseña generado para la cuenta que ya existía en esa casa
+  (residente registrado el 04-jul con **un solo login ese mismo día** — correo en BD). Se le
+  dieron las dos opciones al vecino: si el correo es suyo, entra con su cuenta y **no se
+  duplica**; si no, usa el código y después se da de baja la vieja. Ambas acciones quedaron
+  en `soporte_acceso_log` a nombre de Juan. **Este fue el último reset manual**: con
+  `/dashboard/acceso` desplegado, el comité lo hace solo.
+- **Push hecho** (`681d07f..67f0b9d`): pantalla de ayuda de acceso + botones tipo tecla.
+  Vecinity auto-despliega en cada push; al cerrar la sesión el build **seguía publicando**
+  (el VPS sigue capado al 20% de CPU, los deploys tardan mucho más de lo normal).
+  ⏳ **Verificar al retomar**: que `/dashboard/acceso` cargue en prod y que los botones tengan
+  el relieve (buscar la clase `press` en el HTML de `/login`).
