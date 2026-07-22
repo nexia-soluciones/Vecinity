@@ -1577,3 +1577,46 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - QA en ROLLBACK: reparación ✓ · plan emite `revoke`+`enroll` en ese orden ✓ · segunda
   reimpresión rota a 14840449 y mata la 14840450 ✓ · bajas solo reciben `revoke` ✓ ·
   guarda de entregada-firmada bloquea ✓ (probada contra un job real de los 74 entregados).
+
+## Sesión 2026-07-22 — Ayuda de acceso del comité: "olvidé mi correo y mi contraseña" ✅ (migr. 091)
+- **Pedido (Juan)**: los vecinos olvidan seguido usuario y contraseña; hasta hoy se resolvía
+  a mano pidiendo reactivar el código `CAT-<casa>` (casos 130 y 145). Que el comité lo
+  resuelva solo desde la app — **incluyendo la baja de cuentas huérfanas sin perder historial**.
+- **Diagnóstico**: el problema es doble — no recuerdan la contraseña **ni con qué correo se
+  registraron**. Reactivar el CAT- los obliga a registrarse de nuevo → cuenta duplicada y
+  cuenta vieja huérfana. La app ya tenía todo lo necesario: `/reset-password` acepta
+  `?token_hash=` (canal de Caty, no depende del SITE_URL ni del allow-list de GoTrue).
+- **Migr. 091** (`091_soporte_acceso.sql`, aplicada en prod): tabla `soporte_acceso_log`
+  (bitácora con RLS de solo lectura para el comité de la colonia) + 4 RPCs SECURITY DEFINER
+  gateadas por `is_admin()` **y por colonia**:
+  - `soporte_buscar_cuentas(texto)` — busca por casa, nombre o correo; por casa devuelve las
+    cuentas ligadas (vive ∪ propietario) con correo de registro, **último acceso real
+    (`auth.users.last_sign_in_at`)**, estado y las invitaciones de la casa.
+  - `soporte_reactivar_invitacion(house_id)` — **reusa la MISMA fila** de la invitación de la
+    casa (accepted_at=NULL, +30 días) en vez de crear un código nuevo; si no existe, la crea.
+  - `soporte_baja_cuenta(profile_id, motivo)` — corta el acceso (`is_active=false`,
+    `approval_status='rechazado'`) y libera `telegram_chat_id` para que la persona pueda ligar
+    su cuenta buena. **No borra nada**: casa, pagos, multas, credenciales quedan ligados al
+    perfil. Guardas: no a ti mismo · no cuentas de comité/admin · no de otra colonia · no dos veces.
+  - `soporte_reactivar_cuenta(profile_id)` — deshace la baja.
+- **Server Actions** (`src/app/dashboard/acceso/actions.ts`, SERVICE_ROLE solo en servidor,
+  `requireAdmin` + verificación de colonia): `generarEnlaceReset` (admin/generate_link
+  `type=recovery` → `APP/reset-password?token_hash=…`, para copiar o mandar por WhatsApp) y
+  `cambiarCorreoCuenta` (corrige el correo en auth + perfil; **revierte auth si falla el
+  perfil**, para no partir la cuenta en dos). Ambas escriben en la bitácora.
+- **UI**: `/dashboard/acceso` (buscador, tarjeta por cuenta con las 3 acciones, baja en dos
+  pasos con motivo, código de la casa y "Últimos movimientos") + tarjeta 🔑 **Ayuda de acceso**
+  en `/dashboard/comite`.
+- **QA**: 13/13 en BD con roles reales y ROLLBACK (residente bloqueado en las 3 superficies ·
+  bitácora invisible para residentes · comité de otra colonia bloqueado · baja de sí mismo
+  bloqueada) + 5/5 contra **datos reales de Villa Catania** (baja conservó 32 movimientos,
+  5 incidencias y 3 credenciales, y la casa; el código ya usado se reactivó reusando la misma
+  fila, 1 solo código vivo) + **E2E headless 10/10** con cuenta de comité temporal en la villa
+  DEMO (búsqueda → enlace → **el enlace abre de verdad el formulario de contraseña nueva** →
+  corregir correo ida y vuelta → bitácora) + guard de UI: con rol residente rebota a /dashboard.
+  `npm run build` ✓. La cuenta temporal y sus filas de bitácora se borraron al terminar.
+- **Gotcha QA (para el próximo E2E)**: con `waitUntil:"domcontentloaded"` el `fill` corre
+  antes de la hidratación y React nunca ve el valor → GoTrue responde
+  `400 validation_failed: missing email or phone` y la UI dice "correo o contraseña
+  incorrectos". Usar `networkidle` + esperar a que el input tenga valor. Además el modal del
+  aviso de privacidad tapa el panel del comité en cuentas nuevas: cerrarlo antes de hacer clic.

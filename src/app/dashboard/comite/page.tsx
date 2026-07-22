@@ -527,6 +527,26 @@ export default function PanelComite() {
           )}
         </section>
 
+        {/* Ayuda de acceso (olvidó correo / contraseña) */}
+        <section className="mt-6">
+          <h2 className="text-sm font-bold text-slate-700 mb-2">Acceso de los vecinos</h2>
+          <button
+            onClick={() => router.push("/dashboard/acceso")}
+            className="w-full rounded-2xl bg-white ring-1 ring-slate-100 p-3.5 flex items-center gap-3 text-left hover:ring-brand-200 transition shadow-sm"
+          >
+            <span className="text-2xl">🔑</span>
+            <span>
+              <span className="block font-semibold text-slate-800 text-sm">
+                Ayuda de acceso
+              </span>
+              <span className="block text-xs text-slate-500">
+                &quot;Olvidé mi correo o mi contraseña&quot;: busca por casa y mándale su enlace
+              </span>
+            </span>
+            <span className="ml-auto text-brand-500 text-lg">›</span>
+          </button>
+        </section>
+
         {/* Código de propietario (casas rentadas) */}
         <section className="mt-6">
           <h2 className="text-sm font-bold text-slate-700 mb-2">Acceso para propietario</h2>
