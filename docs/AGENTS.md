@@ -2,10 +2,32 @@
 
 > Plataforma de comunidad segura: administración de fraccionamiento + vigilancia vecinal.
 > Migración del monolito Django (PythonAnywhere, SQLite) → arquitectura Nexia.
-> Última actualización: 2026-07-17
+> Última actualización: 2026-07-22
 >
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
+
+## Signo de mora RFID invertido — migr. 090 (2026-07-22) ✅
+
+Reporte de campo: tarjetas de vecinos que no abrían la pluma. Diagnóstico vía Orin (SDK crudo,
+incluido `wCardRightPlan`) + BD:
+
+- **Bug:** `rfid_reconcile_plan` y `rfid_panel_data` evaluaban mora con `saldo <= -umbral`, pero la
+  convención del sistema es **saldo > 0 = adeudo, saldo < 0 = a favor** (como `crear_reserva`,
+  `notify_saldo` y la consola de caseta). Efecto: casas **con saldo a favor** ≥ umbral tratadas como
+  morosas (103 y 234: tarjetas suspendidas/sin enrolar); morosos reales habrían pasado (no ocurrió:
+  los 4 sobre umbral no tienen tags). Fix: `saldo >= umbral` en las 4 comparaciones. La migración
+  captura además la versión viva del plan (rama `revoke` del 21-jul que solo existía en BD).
+- **Remediación aplicada y verificada en panel:** reactivadas 14840481 (casa 103) y enrolada
+  14938932 (casa 234 — estaba `suspendido` en BD sin haber sido enrolada nunca; se flipeó a `activo`
+  para que entrara por la rama `enroll`); enroladas 14840456, 14840457 y 14840480 (casa 103; las dos
+  últimas = visitas frecuentes dadas de alta en BD, no existían).
+- **Gotcha:** un tag `suspendido` con `enrolled_at IS NULL` es irrecuperable por el plan (la rama
+  `reactivate` pide hardware que no existe y falla cada ciclo) — el estado ya no puede producirse con
+  el signo corregido, pero si aparece, flip manual a `activo`.
+- **Pendientes de campo:** 14840471 (casa 147) perfecta en BD y panel pero no abre — sospecha de
+  chip ≠ serial impreso (leer UID real con NFC o probar en lector); casa 258 debe usar sus
+  reemplazos 14840445/446 (las 485/487 son baja por reimpresión, jamás volverán a abrir).
 
 ## Pago de tarjeta desacoplado del estado de la tarjeta — migr. 087 (2026-07-17) ✅ ⚠ deploy
 
