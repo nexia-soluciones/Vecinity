@@ -439,7 +439,7 @@ export default function CredencialesPage() {
                 <button
                   onClick={() => solicitar("vehicular")}
                   disabled={busy.has("solicitar") || !vehId}
-                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                  className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                 >
                   Solicitar
                 </button>
@@ -490,7 +490,7 @@ export default function CredencialesPage() {
                 <button
                   onClick={() => solicitar("visita")}
                   disabled={busy.has("solicitar") || !visitaNombre.trim()}
-                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                  className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                 >
                   Solicitar
                 </button>
@@ -538,7 +538,7 @@ export default function CredencialesPage() {
                       <button
                         onClick={() => cancelar(s.id)}
                         disabled={busy.has(s.id)}
-                        className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
+                        className="press-soft rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
                       >
                         Cancelar
                       </button>
@@ -731,14 +731,14 @@ export default function CredencialesPage() {
                         <button
                           onClick={() => validarPago(s, true)}
                           disabled={busy.has(s.id)}
-                          className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
+                          className="press flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
                         >
                           {busy.has(s.id) ? "…" : "Pago recibido ✓"}
                         </button>
                         <button
                           onClick={() => validarPago(s, false)}
                           disabled={busy.has(s.id)}
-                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                         >
                           Rechazar pago
                         </button>
@@ -796,7 +796,7 @@ export default function CredencialesPage() {
                             onClick={() => resolver(s, "aprobar")}
                             disabled={busy.has(s.id) || !pagoListo}
                             title={pagoListo ? "" : "Falta validar el comprobante en «Comprobantes por validar» ↑"}
-                            className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                            className="press flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                           >
                             {busy.has(s.id)
                               ? "…"
@@ -809,7 +809,7 @@ export default function CredencialesPage() {
                           <button
                             onClick={() => resolver(s, "rechazar")}
                             disabled={busy.has(s.id)}
-                            className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                            className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                           >
                             Rechazar
                           </button>
@@ -843,7 +843,7 @@ export default function CredencialesPage() {
                         <button
                           onClick={() => reintentar(j.id)}
                           disabled={busy.has(j.id)}
-                          className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
+                          className="press-soft rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0 disabled:opacity-40"
                         >
                           Reintentar
                         </button>
@@ -907,7 +907,7 @@ export default function CredencialesPage() {
                                   <button
                                     onClick={() => setEntregaSols(sols)}
                                     disabled={sols.every((s) => !s.print_job_id)}
-                                    className="rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
+                                    className="press rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
                                   >
                                     Entregar con firma ✍︎
                                   </button>
@@ -1168,20 +1168,20 @@ function FirmaEntrega({
         <div className="flex gap-2 mt-3">
           <button
             onClick={limpiar}
-            className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+            className="press-soft rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
           >
             Limpiar
           </button>
           <button
             onClick={onClose}
-            className="rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+            className="press-soft rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
           >
             Cancelar
           </button>
           <button
             onClick={guardar}
             disabled={guardando}
-            className="flex-1 rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
+            className="press flex-1 rounded-xl bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-40"
           >
             {guardando ? "Guardando…" : `Guardar entrega ✍︎ (${sel.size})`}
           </button>

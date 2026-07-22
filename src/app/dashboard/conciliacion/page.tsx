@@ -1038,7 +1038,7 @@ export default function ConciliacionPage() {
                             <div className="mt-2 flex items-center gap-2">
                               <button
                                 onClick={() => aprobarPropuesta(r.key)}
-                                className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                                className="press rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
                               >
                                 Aprobar
                               </button>

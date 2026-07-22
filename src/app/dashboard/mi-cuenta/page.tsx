@@ -195,7 +195,7 @@ export default function MiCuentaPage() {
                         <button
                           onClick={() => descargarRecibo(m)}
                           disabled={recibo === m.id}
-                          className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-brand-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-700 disabled:opacity-40"
+                          className="press mt-1.5 inline-flex items-center gap-1 rounded-lg bg-brand-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-700 disabled:opacity-40"
                         >
                           {recibo === m.id ? "Generando…" : "🧾 Descargar recibo"}
                         </button>

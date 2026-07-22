@@ -408,14 +408,14 @@ export default function PanelComite() {
               <button
                 onClick={generarCobros}
                 disabled={busy}
-                className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2.5 hover:bg-brand-600 disabled:opacity-40"
+                className="press flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2.5 hover:bg-brand-600 disabled:opacity-40"
               >
                 Generar cobros
               </button>
               <button
                 onClick={aplicarRecargos}
                 disabled={busy}
-                className="flex-1 rounded-xl bg-amber-500 text-white text-sm font-semibold px-3 py-2.5 hover:bg-amber-600 disabled:opacity-40"
+                className="press flex-1 rounded-xl bg-amber-500 text-white text-sm font-semibold px-3 py-2.5 hover:bg-amber-600 disabled:opacity-40"
               >
                 Aplicar recargos
               </button>
@@ -466,7 +466,7 @@ export default function PanelComite() {
               <button
                 onClick={crearConvenio}
                 disabled={cvBusy}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+                className="press rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
               >
                 {cvBusy ? "Creando…" : "Crear convenio"}
               </button>
@@ -565,7 +565,7 @@ export default function PanelComite() {
               <button
                 onClick={generarCodigoPropietario}
                 disabled={propBusy}
-                className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+                className="press flex-1 rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
               >
                 {propBusy ? "Generando…" : "Generar código"}
               </button>
@@ -573,7 +573,7 @@ export default function PanelComite() {
             {propToken && (
               <button
                 onClick={() => navigator.clipboard?.writeText(propToken)}
-                className="rounded-xl bg-slate-800 text-white font-mono text-lg py-2.5 tracking-wider active:scale-[0.99]"
+                className="press rounded-xl bg-slate-800 text-white font-mono text-lg py-2.5 tracking-wider"
                 title="Toca para copiar"
               >
                 {propToken}
@@ -623,14 +623,14 @@ export default function PanelComite() {
                         <button
                           onClick={() => resolverVigilante(v.id, "aprobar")}
                           disabled={vigBusy.has(v.id)}
-                          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                          className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                         >
                           {vigBusy.has(v.id) ? "…" : "Aprobar"}
                         </button>
                         <button
                           onClick={() => resolverVigilante(v.id, "baja")}
                           disabled={vigBusy.has(v.id)}
-                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                         >
                           No
                         </button>
@@ -639,7 +639,7 @@ export default function PanelComite() {
                       <button
                         onClick={() => resolverVigilante(v.id, "baja")}
                         disabled={vigBusy.has(v.id)}
-                        className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        className="press-soft rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                       >
                         {vigBusy.has(v.id) ? "…" : "Dar de baja"}
                       </button>

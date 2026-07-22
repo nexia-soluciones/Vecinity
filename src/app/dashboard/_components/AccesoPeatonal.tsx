@@ -206,7 +206,7 @@ export default function AccesoPeatonal({ houseId }: { houseId: string }) {
                 <button
                   onClick={enviar}
                   disabled={busy}
-                  className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
+                  className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
                 >
                   {busy ? "Enviando…" : "Enviar al comité"}
                 </button>

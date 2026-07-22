@@ -506,7 +506,7 @@ export default function GastosPage() {
                       <button
                         onClick={() => clasificar(g)}
                         disabled={c.busy}
-                        className="rounded-xl bg-amber-600 text-white text-sm font-bold py-2.5 hover:opacity-90 disabled:opacity-40"
+                        className="press rounded-xl bg-amber-600 text-white text-sm font-bold py-2.5 hover:opacity-90 disabled:opacity-40"
                       >
                         {c.busy ? "Guardando…" : "Clasificar"}
                       </button>
@@ -689,7 +689,7 @@ export default function GastosPage() {
                 <button
                   onClick={crearCategoria}
                   disabled={catBusy || !nuevaCat.trim()}
-                  className="rounded-xl bg-brand-500 text-white text-sm font-bold px-4 disabled:opacity-40"
+                  className="press rounded-xl bg-brand-500 text-white text-sm font-bold px-4 disabled:opacity-40"
                 >
                   ➕ Crear
                 </button>
@@ -983,7 +983,7 @@ export default function GastosPage() {
                           <button
                             onClick={() => clasificar(g)}
                             disabled={c.busy}
-                            className="flex-1 rounded-xl bg-brand-500 text-white text-sm font-bold py-2 disabled:opacity-40"
+                            className="press flex-1 rounded-xl bg-brand-500 text-white text-sm font-bold py-2 disabled:opacity-40"
                           >
                             {c.busy ? "Guardando…" : "Guardar"}
                           </button>

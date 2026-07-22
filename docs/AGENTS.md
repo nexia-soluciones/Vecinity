@@ -1620,3 +1620,33 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   `400 validation_failed: missing email or phone` y la UI dice "correo o contraseña
   incorrectos". Usar `networkidle` + esperar a que el input tenga valor. Además el modal del
   aviso de privacidad tapa el panel del comité en cuentas nuevas: cerrarlo antes de hacer clic.
+
+### Adenda 2026-07-22 (2) — Botones con sensación física en toda la app ✅
+- **Pedido (Juan)**: mejorar la sensación de los botones, con referencia a
+  `github.com/reposis/realistic_button` — que resultó ser un **paquete de Flutter (Dart)**,
+  no CSS: se tradujo la idea (tecla que se hunde) a CSS/Tailwind v4. Juan eligió la variante
+  "tecla física" y el alcance "botones de acción sólidos" sobre una comparación visual de
+  3 intensidades en reposo/presionado.
+- **`globals.css`**: dos utilidades nuevas de Tailwind v4 (`@utility`), **color-agnósticas**
+  — las sombras van en negro/blanco translúcido, no en un color de marca, así la MISMA clase
+  sirve en verde, rojo, oscuro o ámbar:
+  - `.press` (botones sólidos): borde inferior `0 4px 0 rgb(0 0 0/.22)` + sombra ambiental +
+    brillo interior arriba + degradado sutil; en `:active:not(:disabled)` baja
+    `translateY(3px)` y la sombra colapsa a 1px con sombra interior. `:disabled` pierde el
+    relieve (se ve que no se puede pulsar). Transición 90ms.
+  - `.press-soft` (botones claros/con borde): el mismo gesto, 2px y sombras al 9%.
+  - `@media (prefers-reduced-motion: reduce)` → transición de 1ms (se siente, no se anima).
+  - `.btn-primary`, `.btn-secondary` y `.btn-telegram` ahora componen `press`/`press-soft`.
+- **Barrido mecánico** (script en el scratchpad de la sesión, no versionado): escáner que
+  respeta llaves/paréntesis/comillas para encontrar el cierre real del tag (los
+  `onClick={() => …}` traen `>` adentro) y solo toca `<button>`/`<a>`. **80 botones sólidos**
+  → `press`, **28 claros** → `press-soft`; quita `shadow-sm`, `shadow`, `transition` y
+  `active:scale-[…]` para que no peleen con la utilidad.
+- **31 botones omitidos a propósito**: los que traen `ring-` (tarjetas de navegación del panel
+  y chips de filtro). Razón doble: son tarjetas, no teclas, y en Tailwind el `ring` ES un
+  `box-shadow` → la utilidad se lo comería. **Regla para el futuro: `press` y `ring-*` no se
+  mezclan.**
+- **QA**: `npm run build` ✓ sin warnings · capturas reales en móvil 390px del login (reposo y
+  **presionado**, con el botón hundido), del panel del comité (verde y ámbar lado a lado, se
+  ven parejos) y de /dashboard/acceso (verde, rojo y claros juntos). Cuenta de comité temporal
+  de la villa DEMO borrada al terminar (perfil, aceptación de aviso y usuario de auth).

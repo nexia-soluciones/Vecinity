@@ -279,7 +279,7 @@ export default function EstadoCuentaPage() {
           <button
             onClick={buscar}
             disabled={buscando}
-            className="rounded-xl bg-slate-700 text-white font-semibold px-5 py-2.5 disabled:opacity-40"
+            className="press rounded-xl bg-slate-700 text-white font-semibold px-5 py-2.5 disabled:opacity-40"
           >
             {buscando ? "…" : "Buscar"}
           </button>
@@ -511,14 +511,14 @@ export default function EstadoCuentaPage() {
                               <button
                                 onClick={() => resolver(m.id, true)}
                                 disabled={resolviendo.has(m.id)}
-                                className="rounded-lg bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-600 disabled:opacity-40"
+                                className="press rounded-lg bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-600 disabled:opacity-40"
                               >
                                 {resolviendo.has(m.id) ? "…" : "Aprobar"}
                               </button>
                               <button
                                 onClick={() => resolver(m.id, false)}
                                 disabled={resolviendo.has(m.id)}
-                                className="rounded-lg border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40"
+                                className="press-soft rounded-lg border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40"
                               >
                                 Rechazar
                               </button>

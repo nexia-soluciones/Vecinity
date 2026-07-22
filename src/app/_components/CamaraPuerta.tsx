@@ -193,7 +193,7 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
           {puerta.fase === "reposo" && !confirmando && (
             <button
               onClick={() => setConfirmando(true)}
-              className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-3 hover:bg-brand-600"
+              className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-3 hover:bg-brand-600"
             >
               Abrir puerta
             </button>
@@ -202,13 +202,13 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
             <div className="flex items-center gap-2">
               <button
                 onClick={abrirPuerta}
-                className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-3 hover:bg-emerald-700"
+                className="press flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-3 hover:bg-emerald-700"
               >
                 ✓ Sí, abrir la puerta
               </button>
               <button
                 onClick={() => setConfirmando(false)}
-                className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-4 py-3 hover:bg-slate-50"
+                className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-4 py-3 hover:bg-slate-50"
               >
                 Cancelar
               </button>
@@ -230,7 +230,7 @@ export default function CamaraPuerta({ conBitacora = false }: { conBitacora?: bo
               <p className="text-sm text-rose-600 text-center">{puerta.msg}</p>
               <button
                 onClick={() => setPuerta({ fase: "reposo" })}
-                className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-4 py-2 hover:bg-slate-50"
+                className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-4 py-2 hover:bg-slate-50"
               >
                 Entendido
               </button>

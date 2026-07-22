@@ -475,14 +475,14 @@ export default function IncidenciasPage() {
                     <button
                       onClick={() => votar(r.id, true)}
                       disabled={votando.has(r.id)}
-                      className="flex-1 rounded-xl bg-red-500 text-white text-sm font-semibold px-3 py-2 hover:bg-red-600 disabled:opacity-40"
+                      className="press flex-1 rounded-xl bg-red-500 text-white text-sm font-semibold px-3 py-2 hover:bg-red-600 disabled:opacity-40"
                     >
                       {votando.has(r.id) ? "…" : "Aprobar (1 voto) → multar"}
                     </button>
                     <button
                       onClick={() => votar(r.id, false)}
                       disabled={votando.has(r.id)}
-                      className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                      className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                     >
                       Rechazar
                     </button>
@@ -629,7 +629,7 @@ function IdentificarItem({ r, onDone }: { r: Reporte; onDone: (id: string) => vo
         <button
           onClick={identificar}
           disabled={busy || !numero.trim()}
-          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:opacity-90 disabled:opacity-40"
+          className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:opacity-90 disabled:opacity-40"
         >
           {busy ? "…" : "Identificar"}
         </button>
@@ -763,7 +763,7 @@ function ResolverItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void 
           <button
             onClick={corregirCasa}
             disabled={casaBusy || !nuevoNum.trim()}
-            className="rounded-lg bg-brand-500 text-white text-xs font-bold px-3 py-1 disabled:opacity-40"
+            className="press rounded-lg bg-brand-500 text-white text-xs font-bold px-3 py-1 disabled:opacity-40"
           >
             {casaBusy ? "…" : "Guardar"}
           </button>
@@ -828,14 +828,14 @@ function ResolverItem({ r, onDone }: { r: Reporte; onDone: (id: string) => void 
         <button
           onClick={() => resolver("multar")}
           disabled={busy}
-          className="rounded-xl bg-red-500 text-white text-sm font-semibold px-3 py-2 hover:bg-red-600 disabled:opacity-40"
+          className="press rounded-xl bg-red-500 text-white text-sm font-semibold px-3 py-2 hover:bg-red-600 disabled:opacity-40"
         >
           Multar
         </button>
         <button
           onClick={() => resolver("rechazar")}
           disabled={busy}
-          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
         >
           Rechazar
         </button>

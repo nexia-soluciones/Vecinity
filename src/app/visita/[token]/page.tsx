@@ -141,7 +141,7 @@ export default function PaseVisitaPublico() {
           <button
             onClick={() => accionGuardia("salida")}
             disabled={acting}
-            className="mt-4 w-full rounded-2xl bg-slate-700 text-white py-3.5 font-extrabold shadow-lg disabled:opacity-40 active:scale-[0.99] transition"
+            className="press mt-4 w-full rounded-2xl bg-slate-700 text-white py-3.5 font-extrabold shadow-lg disabled:opacity-40"
           >
             {acting ? "Registrando…" : "Marcar salida"}
           </button>

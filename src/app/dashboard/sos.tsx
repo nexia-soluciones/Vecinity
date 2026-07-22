@@ -125,7 +125,7 @@ export function SosModal({ alerta, onClose }: { alerta: SosAlerta; onClose: () =
         <a
           href="tel:911"
           onClick={llamar911}
-          className="mt-4 block w-full text-center rounded-2xl bg-red-600 text-white py-3.5 font-extrabold text-lg shadow-lg active:scale-[0.99]"
+          className="press mt-4 block w-full text-center rounded-2xl bg-red-600 text-white py-3.5 font-extrabold text-lg shadow-lg"
         >
           📞 Llamar al 911
         </a>

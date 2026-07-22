@@ -191,7 +191,7 @@ export default function VisitasPage() {
                     {v.token_acceso && v.estado === "esperando" && (
                       <button
                         onClick={() => setPase({ nombre: v.nombre, token: v.token_acceso! })}
-                        className="rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-2 hover:bg-brand-600"
+                        className="press rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-2 hover:bg-brand-600"
                       >
                         Ver pase
                       </button>
@@ -199,7 +199,7 @@ export default function VisitasPage() {
                     {v.estado === "esperando" && (
                       <button
                         onClick={() => cancelar(v.id)}
-                        className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+                        className="press-soft rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
                       >
                         Cancelar
                       </button>

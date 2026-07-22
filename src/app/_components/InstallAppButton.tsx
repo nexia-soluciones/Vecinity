@@ -110,7 +110,7 @@ export function InstallAppButton() {
           </div>
           <button
             onClick={instalar}
-            className="shrink-0 rounded-xl bg-brand-500 text-white font-semibold text-sm px-4 py-2 hover:bg-brand-600"
+            className="press shrink-0 rounded-xl bg-brand-500 text-white font-semibold text-sm px-4 py-2 hover:bg-brand-600"
           >
             {ios ? "Cómo" : "Instalar"}
           </button>

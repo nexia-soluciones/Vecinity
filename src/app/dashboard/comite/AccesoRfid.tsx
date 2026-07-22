@@ -198,7 +198,7 @@ export default function AccesoRfid() {
         <button
           onClick={() => aplicarOverride(houseId)}
           disabled={busy}
-          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+          className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
         >
           {busy ? "…" : "Guardar"}
         </button>
@@ -207,7 +207,7 @@ export default function AccesoRfid() {
             setEditando(null);
             setMotivo("");
           }}
-          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
+          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
         >
           Cancelar
         </button>
@@ -375,7 +375,7 @@ export default function AccesoRfid() {
             <button
               onClick={buscarOtraCasa}
               disabled={buscando}
-              className="rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+              className="press-soft rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
             >
               {buscando ? "…" : "Buscar"}
             </button>

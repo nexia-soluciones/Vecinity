@@ -116,7 +116,7 @@ export default function AvisoPrivacidad() {
           <button
             onClick={aceptar}
             disabled={aceptando}
-            className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-3 hover:bg-brand-600 disabled:opacity-50"
+            className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-3 hover:bg-brand-600 disabled:opacity-50"
           >
             {aceptando ? "Registrando…" : "He leído y acepto el Aviso de Privacidad"}
           </button>

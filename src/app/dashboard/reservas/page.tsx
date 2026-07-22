@@ -540,7 +540,7 @@ export default function ReservasPage() {
                   {r.estado !== "en_uso" && (
                     <button
                       onClick={() => cancelar(r.id)}
-                      className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0"
+                      className="press-soft rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0"
                     >
                       Cancelar
                     </button>

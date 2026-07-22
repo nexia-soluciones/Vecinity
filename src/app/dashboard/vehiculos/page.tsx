@@ -362,7 +362,7 @@ export default function VehiculosPage() {
                   {v.estado !== "aprobado" && (
                     <button
                       onClick={() => eliminar(v.id)}
-                      className="rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0"
+                      className="press-soft rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-2 hover:bg-slate-50 shrink-0"
                     >
                       Quitar
                     </button>
@@ -417,7 +417,7 @@ export default function VehiculosPage() {
               <button
                 onClick={buscar}
                 disabled={buscando}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
+                className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
               >
                 {buscando ? "…" : "Buscar"}
               </button>
@@ -513,14 +513,14 @@ function AprobarVehiculo({
         <button
           onClick={() => onResolve(v.id, "aprobado", rfid)}
           disabled={busy}
-          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+          className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
         >
           {busy ? "…" : "Aprobar"}
         </button>
         <button
           onClick={() => onResolve(v.id, "rechazado")}
           disabled={busy}
-          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
         >
           No
         </button>

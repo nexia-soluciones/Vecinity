@@ -136,7 +136,7 @@ export default function MultasPage() {
           <button
             onClick={buscar}
             disabled={buscando}
-            className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-5 py-2.5 hover:bg-brand-600 disabled:opacity-40"
+            className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-5 py-2.5 hover:bg-brand-600 disabled:opacity-40"
           >
             {buscando ? "Buscando…" : "Buscar"}
           </button>
@@ -326,7 +326,7 @@ function MultaItem({ m, onDone }: { m: Multa; onDone: () => Promise<void> }) {
             setErr(null);
             setMonto(String(m.monto_multa));
           }}
-          className="rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-1.5 hover:bg-slate-50"
+          className="press-soft rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold px-3 py-1.5 hover:bg-slate-50"
         >
           ✏️ Corregir monto
         </button>
@@ -362,7 +362,7 @@ function MultaItem({ m, onDone }: { m: Multa; onDone: () => Promise<void> }) {
           <button
             onClick={corregir}
             disabled={busy}
-            className="rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+            className="press rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
           >
             {busy ? "Aplicando…" : `Corregir a ${money(parseFloat(monto) || 0)}`}
           </button>
@@ -383,7 +383,7 @@ function MultaItem({ m, onDone }: { m: Multa; onDone: () => Promise<void> }) {
           <button
             onClick={cancelar}
             disabled={busy}
-            className="rounded-xl bg-red-600 text-white text-sm font-semibold py-2 hover:bg-red-700 disabled:opacity-40"
+            className="press rounded-xl bg-red-600 text-white text-sm font-semibold py-2 hover:bg-red-700 disabled:opacity-40"
           >
             {busy ? "Cancelando…" : `Cancelar multa de ${money(Number(m.monto_multa))}`}
           </button>

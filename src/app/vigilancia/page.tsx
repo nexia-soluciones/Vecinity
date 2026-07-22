@@ -1181,7 +1181,7 @@ export default function VigilanciaPage() {
         {/* Escanear pase QR de una visita */}
         <button
           onClick={abrirScan}
-          className="mt-4 w-full rounded-2xl bg-brand-500 text-white font-bold text-lg py-4 shadow-lg hover:bg-brand-600 active:scale-[0.99] transition flex items-center justify-center gap-2"
+          className="press mt-4 w-full rounded-2xl bg-brand-500 text-white font-bold text-lg py-4 shadow-lg hover:bg-brand-600 flex items-center justify-center gap-2"
         >
           📷 Escanear pase QR
         </button>
@@ -1243,7 +1243,7 @@ export default function VigilanciaPage() {
             <button
               onClick={registrarVisitaManual}
               disabled={mvBusy}
-              className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+              className="press rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
             >
               {mvBusy ? "Registrando…" : "Registrar entrada"}
             </button>
@@ -1264,7 +1264,7 @@ export default function VigilanciaPage() {
             />
             <button
               onClick={buscarPlaca}
-              className="rounded-xl bg-slate-700 text-white text-base font-semibold px-4 py-2"
+              className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-4 py-2"
             >
               Buscar
             </button>
@@ -1301,7 +1301,7 @@ export default function VigilanciaPage() {
             />
             <button
               onClick={buscarDirectorio}
-              className="rounded-xl bg-slate-700 text-white text-base font-semibold px-4 py-2"
+              className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-4 py-2"
             >
               Buscar
             </button>
@@ -1336,7 +1336,7 @@ export default function VigilanciaPage() {
               <button
                 onClick={guardarTelefonos}
                 disabled={dirBusy}
-                className="rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+                className="press rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
               >
                 {dirBusy ? "Guardando…" : "Guardar teléfonos"}
               </button>
@@ -1413,7 +1413,7 @@ export default function VigilanciaPage() {
                       </label>
                       <button
                         onClick={() => visitaAccion(v.id, "entrada")}
-                        className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
+                        className="press rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
                       >
                         Entrada
                       </button>
@@ -1421,7 +1421,7 @@ export default function VigilanciaPage() {
                   ) : (
                     <button
                       onClick={() => visitaAccion(v.id, "salida")}
-                      className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                      className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                     >
                       Salida
                     </button>
@@ -1459,14 +1459,14 @@ export default function VigilanciaPage() {
                   {r.estado === "aprobada" ? (
                     <button
                       onClick={() => reservaAccion(r.id, "entregar")}
-                      className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600 shrink-0"
+                      className="press rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600 shrink-0"
                     >
                       Entregar
                     </button>
                   ) : (
                     <button
                       onClick={() => reservaAccion(r.id, "devolver")}
-                      className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                      className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                     >
                       Devolución
                     </button>
@@ -1561,7 +1561,7 @@ export default function VigilanciaPage() {
               {npMsg && <p className="text-base text-red-600">{npMsg}</p>}
               <button
                 onClick={agregarProveedor}
-                className="rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600"
+                className="press rounded-xl bg-brand-500 text-white text-base font-semibold py-2 hover:bg-brand-600"
               >
                 Guardar proveedor recurrente
               </button>
@@ -1625,7 +1625,7 @@ export default function VigilanciaPage() {
                     {dentro ? (
                       <button
                         onClick={() => salirProveedor(dentro.id)}
-                        className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                        className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                       >
                         Salida
                       </button>
@@ -1652,7 +1652,7 @@ export default function VigilanciaPage() {
                         </label>
                         <button
                           onClick={() => ingresarProveedor(pr.id)}
-                          className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
+                          className="press rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
                         >
                           Entrada
                         </button>
@@ -1733,7 +1733,7 @@ export default function VigilanciaPage() {
             />
             <button
               onClick={registrarPaquete}
-              className="rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
+              className="press rounded-xl bg-brand-500 text-white text-base font-semibold px-3 py-2 hover:bg-brand-600"
             >
               +
             </button>
@@ -1754,7 +1754,7 @@ export default function VigilanciaPage() {
                   </div>
                   <button
                     onClick={() => entregarPaquete(p.id)}
-                    className="rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
+                    className="press rounded-xl bg-slate-700 text-white text-base font-semibold px-3 py-2 hover:bg-slate-800 shrink-0"
                   >
                     Entregar
                   </button>
@@ -1907,7 +1907,7 @@ export default function VigilanciaPage() {
                     <button
                       onClick={salidaVfDesdeScan}
                       disabled={scanBusy}
-                      className="rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
+                      className="press rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
                     >
                       {scanBusy ? "Registrando…" : "Marcar salida"}
                     </button>
@@ -1915,7 +1915,7 @@ export default function VigilanciaPage() {
                     <button
                       onClick={entradaVfDesdeScan}
                       disabled={scanBusy}
-                      className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+                      className="press rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
                     >
                       {scanBusy ? "Registrando…" : "✓ Registrar entrada"}
                     </button>
@@ -1978,7 +1978,7 @@ export default function VigilanciaPage() {
                     <button
                       onClick={entradaDesdeScan}
                       disabled={scanBusy}
-                      className="rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
+                      className="press rounded-xl bg-brand-500 text-white text-base font-bold py-3 hover:bg-brand-600 disabled:opacity-40"
                     >
                       {scanBusy ? "Registrando…" : "✓ Marcar entrada"}
                     </button>
@@ -1987,7 +1987,7 @@ export default function VigilanciaPage() {
                   <button
                     onClick={salidaDesdeScan}
                     disabled={scanBusy}
-                    className="rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
+                    className="press rounded-xl bg-slate-700 text-white text-base font-bold py-3 hover:bg-slate-800 disabled:opacity-40"
                   >
                     {scanBusy ? "Registrando…" : "Marcar salida"}
                   </button>
@@ -2032,7 +2032,7 @@ export default function VigilanciaPage() {
             <div className="flex gap-2">
               <button
                 onClick={guardarCono}
-                className="flex-1 rounded-xl bg-brand-500 text-white text-base font-semibold py-2.5 hover:bg-brand-600"
+                className="press flex-1 rounded-xl bg-brand-500 text-white text-base font-semibold py-2.5 hover:bg-brand-600"
               >
                 Guardar
               </button>

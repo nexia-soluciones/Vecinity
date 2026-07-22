@@ -260,7 +260,7 @@ export default function ProyectosPage() {
                 <button
                   onClick={crearProyecto}
                   disabled={busy}
-                  className="flex-1 rounded-xl bg-brand-500 text-white py-2.5 font-bold disabled:opacity-40"
+                  className="press flex-1 rounded-xl bg-brand-500 text-white py-2.5 font-bold disabled:opacity-40"
                 >
                   {busy ? "Creando…" : "Crear"}
                 </button>

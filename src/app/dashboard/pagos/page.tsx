@@ -727,7 +727,7 @@ export default function PagosPage() {
                                   <button
                                     onClick={() => enlazar(t)}
                                     disabled={!linkHash || resolviendo.has(t.id)}
-                                    className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-40"
+                                    className="press rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-40"
                                   >
                                     {resolviendo.has(t.id) ? "…" : "Enlazar y aprobar"}
                                   </button>
@@ -756,7 +756,7 @@ export default function PagosPage() {
                               />
                               <button
                                 onClick={() => corregirMonto(t)}
-                                className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                                className="press rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
                               >
                                 Guardar
                               </button>
@@ -776,14 +776,14 @@ export default function PagosPage() {
                           <button
                             onClick={() => resolver(t, true)}
                             disabled={resolviendo.has(t.id)}
-                            className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                            className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                           >
                             {resolviendo.has(t.id) ? "…" : "Aprobar"}
                           </button>
                           <button
                             onClick={() => resolver(t, false)}
                             disabled={resolviendo.has(t.id)}
-                            className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                            className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                           >
                             No
                           </button>
@@ -834,7 +834,7 @@ export default function PagosPage() {
                   <button
                     onClick={() => descartarBanco(m.banco_hash)}
                     onBlur={() => setDescartando((d) => (d === m.banco_hash ? null : d))}
-                    className={`shrink-0 rounded-xl text-xs font-semibold px-3 py-2 transition ${
+                    className={`press shrink-0 rounded-xl text-xs font-semibold px-3 py-2 ${
                       descartando === m.banco_hash
                         ? "bg-red-600 text-white"
                         : "border border-slate-200 text-slate-500 hover:bg-slate-50"
@@ -912,7 +912,7 @@ export default function PagosPage() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => responderAclaracion(t)}
-                                className="rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                                className="press rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
                               >
                                 Enviar respuesta
                               </button>
@@ -935,7 +935,7 @@ export default function PagosPage() {
                               setRespTexto("");
                               setRespMsg(null);
                             }}
-                            className="mt-2 rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
+                            className="press mt-2 rounded-lg bg-sky-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90"
                           >
                             Responder
                           </button>

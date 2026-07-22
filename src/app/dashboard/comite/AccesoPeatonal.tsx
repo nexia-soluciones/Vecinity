@@ -155,7 +155,7 @@ export default function AccesoPeatonal() {
                         <button
                           onClick={() => revisar(p.id, false)}
                           disabled={busy}
-                          className="rounded-xl bg-red-500 text-white text-xs font-semibold px-3 py-1.5 disabled:opacity-40"
+                          className="press rounded-xl bg-red-500 text-white text-xs font-semibold px-3 py-1.5 disabled:opacity-40"
                         >
                           Confirmar rechazo
                         </button>
@@ -175,7 +175,7 @@ export default function AccesoPeatonal() {
                       <button
                         onClick={() => revisar(p.id, true)}
                         disabled={busy}
-                        className="rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-600 disabled:opacity-40"
+                        className="press rounded-xl bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 hover:bg-brand-600 disabled:opacity-40"
                       >
                         {busy ? "…" : "Aprobar"}
                       </button>

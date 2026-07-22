@@ -277,7 +277,7 @@ export default function Dashboard() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={conectarCaty}
-                className="flex-1 rounded-xl bg-sky-500 text-white font-semibold text-sm px-4 py-2.5 hover:bg-sky-600 transition"
+                className="press flex-1 rounded-xl bg-sky-500 text-white font-semibold text-sm px-4 py-2.5 hover:bg-sky-600"
               >
                 Conectar con Caty
               </button>
@@ -425,7 +425,7 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={postularme}
-                  className="mt-3 w-full rounded-xl bg-slate-800 text-white text-sm font-semibold py-2.5 hover:bg-slate-700 transition"
+                  className="press mt-3 w-full rounded-xl bg-slate-800 text-white text-sm font-semibold py-2.5 hover:bg-slate-700"
                 >
                   Postularme
                 </button>
@@ -505,14 +505,14 @@ export default function Dashboard() {
                       <button
                         onClick={() => resolver(u.id, "aprobado")}
                         disabled={resolviendo.has(u.id)}
-                        className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                        className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                       >
                         {resolviendo.has(u.id) ? "…" : "Aprobar"}
                       </button>
                       <button
                         onClick={() => resolver(u.id, "rechazado")}
                         disabled={resolviendo.has(u.id)}
-                        className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                       >
                         No
                       </button>

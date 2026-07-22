@@ -252,7 +252,7 @@ export default function AreasAdminPage() {
               />
               <button
                 onClick={guardarUmbral}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
+                className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
               >
                 {umbralGuardado ? "Guardado ✓" : "Guardar"}
               </button>
@@ -284,7 +284,7 @@ export default function AreasAdminPage() {
               />
               <button
                 onClick={guardarTope}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
+                className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
               >
                 {topeGuardado ? "Guardado ✓" : "Guardar"}
               </button>
@@ -312,7 +312,7 @@ export default function AreasAdminPage() {
               />
               <button
                 onClick={guardarServicios}
-                className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
+                className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600"
               >
                 {serviciosGuardado ? "Guardado ✓" : "Guardar"}
               </button>
@@ -359,14 +359,14 @@ export default function AreasAdminPage() {
                     <button
                       onClick={() => resolverReserva(r.id, "aprobada")}
                       disabled={resolviendo.has(r.id)}
-                      className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                      className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                     >
                       {resolviendo.has(r.id) ? "…" : "Aprobar"}
                     </button>
                     <button
                       onClick={() => resolverReserva(r.id, "rechazada")}
                       disabled={resolviendo.has(r.id)}
-                      className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                      className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                     >
                       No
                     </button>
@@ -425,7 +425,7 @@ export default function AreasAdminPage() {
             <button
               onClick={crearArea}
               disabled={!nuevoNombre.trim()}
-              className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 disabled:opacity-40"
+              className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 disabled:opacity-40"
             >
               Agregar
             </button>

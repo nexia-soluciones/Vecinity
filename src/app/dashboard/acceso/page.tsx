@@ -251,7 +251,7 @@ export default function AyudaDeAcceso() {
             <button
               onClick={buscar}
               disabled={buscando}
-              className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
+              className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-600 disabled:opacity-40"
             >
               {buscando ? "…" : "Buscar"}
             </button>
@@ -325,7 +325,7 @@ export default function AyudaDeAcceso() {
                         <button
                           onClick={() => generarEnlace(c)}
                           disabled={busyId === c.profile_id}
-                          className="rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
+                          className="press rounded-xl bg-brand-500 text-white text-sm font-semibold px-3 py-2 hover:bg-brand-600 disabled:opacity-40"
                         >
                           {busyId === c.profile_id ? "…" : "🔐 Enlace de contraseña"}
                         </button>
@@ -335,7 +335,7 @@ export default function AyudaDeAcceso() {
                             setCorreoNuevo("");
                             setConfirmandoBaja(null);
                           }}
-                          className="rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
+                          className="press-soft rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
                         >
                           ✉️ Corregir correo
                         </button>
@@ -347,7 +347,7 @@ export default function AyudaDeAcceso() {
                             setMotivoBaja("");
                             setEditando(null);
                           }}
-                          className="rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
+                          className="press-soft rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold px-3 py-2 hover:bg-slate-50"
                         >
                           🚫 Dar de baja
                         </button>
@@ -356,7 +356,7 @@ export default function AyudaDeAcceso() {
                       <button
                         onClick={() => reactivarCuenta(c)}
                         disabled={busyId === c.profile_id}
-                        className="mt-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
+                        className="press-soft mt-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold px-3 py-2 hover:bg-slate-50 disabled:opacity-40"
                       >
                         {busyId === c.profile_id ? "…" : "↩️ Deshacer la baja"}
                       </button>
@@ -378,7 +378,7 @@ export default function AyudaDeAcceso() {
                               await navigator.clipboard?.writeText(enlace.url);
                               setCopiado(true);
                             }}
-                            className="flex-1 rounded-xl bg-slate-800 text-white text-sm font-semibold py-2"
+                            className="press flex-1 rounded-xl bg-slate-800 text-white text-sm font-semibold py-2"
                           >
                             {copiado ? "¡Copiado!" : "Copiar enlace"}
                           </button>
@@ -389,7 +389,7 @@ export default function AyudaDeAcceso() {
                             )}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 rounded-xl bg-emerald-500 text-white text-sm font-semibold py-2 text-center"
+                            className="press flex-1 rounded-xl bg-emerald-500 text-white text-sm font-semibold py-2 text-center"
                           >
                             WhatsApp
                           </a>
@@ -418,7 +418,7 @@ export default function AyudaDeAcceso() {
                         <button
                           onClick={() => guardarCorreo(c)}
                           disabled={busyId === c.profile_id}
-                          className="w-full mt-2 rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
+                          className="press w-full mt-2 rounded-xl bg-brand-500 text-white text-sm font-semibold py-2 hover:bg-brand-600 disabled:opacity-40"
                         >
                           {busyId === c.profile_id ? "Guardando…" : "Guardar correo"}
                         </button>
@@ -443,13 +443,13 @@ export default function AyudaDeAcceso() {
                           <button
                             onClick={() => darDeBaja(c)}
                             disabled={busyId === c.profile_id}
-                            className="flex-1 rounded-xl bg-red-500 text-white text-sm font-semibold py-2 hover:bg-red-600 disabled:opacity-40"
+                            className="press flex-1 rounded-xl bg-red-500 text-white text-sm font-semibold py-2 hover:bg-red-600 disabled:opacity-40"
                           >
                             {busyId === c.profile_id ? "…" : "Sí, dar de baja"}
                           </button>
                           <button
                             onClick={() => setConfirmandoBaja(null)}
-                            className="flex-1 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2 hover:bg-white"
+                            className="press-soft flex-1 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2 hover:bg-white"
                           >
                             Cancelar
                           </button>
@@ -480,14 +480,14 @@ export default function AyudaDeAcceso() {
               <button
                 onClick={() => reactivarCodigo(r)}
                 disabled={busyId === r.house_id}
-                className="w-full mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2 hover:bg-slate-50 disabled:opacity-40"
+                className="press-soft w-full mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2 hover:bg-slate-50 disabled:opacity-40"
               >
                 {busyId === r.house_id ? "…" : "🎟️ Reactivar código de invitación"}
               </button>
               {codigos[r.house_id] && (
                 <button
                   onClick={() => navigator.clipboard?.writeText(codigos[r.house_id])}
-                  className="w-full mt-2 rounded-xl bg-slate-800 text-white font-mono text-lg py-2.5 tracking-wider active:scale-[0.99]"
+                  className="press w-full mt-2 rounded-xl bg-slate-800 text-white font-mono text-lg py-2.5 tracking-wider"
                   title="Toca para copiar"
                 >
                   {codigos[r.house_id]}
