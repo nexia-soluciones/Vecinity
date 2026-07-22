@@ -1664,3 +1664,9 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   (el VPS sigue capado al 20% de CPU, los deploys tardan mucho más de lo normal).
   ⏳ **Verificar al retomar**: que `/dashboard/acceso` cargue en prod y que los botones tengan
   el relieve (buscar la clase `press` en el HTML de `/login`).
+- **Desenlace casa 186**: el vecino usó `CAT-186` **72 s después** de reactivarlo (19:48:46 →
+  19:49:58 UTC) y entró de inmediato. La casa quedó con **2 cuentas**: la del 04-jul (un solo
+  login, nunca volvió) y la nueva de hoy. Los apellidos coinciden → casi seguro la misma
+  persona con otro correo. ⏳ **Pendiente**: confirmarlo con él y dar de baja la vieja desde
+  `/dashboard/acceso` (la baja conserva su historial). Es el caso exacto que la pantalla
+  nueva evita: con "Corregir correo" + enlace habría entrado con su cuenta de siempre.
