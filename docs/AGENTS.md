@@ -1691,3 +1691,24 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
 - **Gotcha QA**: reservar "hoy" a primera hora falla con "fecha/hora pasada" (la RPC valida
   contra `now()`, el grid de horas no oculta horas pasadas del día actual) — issue menor de
   UX preexistente, no bloqueante.
+
+### Adenda 2026-07-27 (2) — Tarjeta 14840479 casa 161 + barrido BD↔panel ✅
+- **Reporte**: la tarjeta 14840479 (casa 161) "suena pero queda en rojo". **NO es falla**:
+  esa tarjeta se dio de **baja por reemplazo el 21-jul** (migr. 089) y el panel la niega con
+  vigencia vencida (2000-01-01→2000-01-02) — el comportamiento diseñado (el SDK no borra
+  tarjetas). Su reemplazo **14840450 está vigente hasta 2036 con puerta 1** y la casa está
+  al corriente. ⏳ **Pendiente operativo**: confirmar que la casa 161 tenga físicamente la
+  14840450 y retirar la vieja. El panel no expone contador de usos (swipe_times siempre 0),
+  no se puede saber si ya la usaron.
+- **Barrido completo** (185 tarjetas, per-card vía bridge `GET /cards/{no}` — el masivo
+  trunca): **185/185 consistentes**. 182 activas vigentes con puerta correcta (cero con el
+  gotcha wCardRightPlan), 3 bajas todas suspendidas en panel.
+- ⚠️ **Barrido inverso**: el panel tiene **2 tarjetas que no existen en BD** —
+  `0002745188` y `12345` (instalador, alta 14-jul), **vigentes hasta 14-ago-2026 y con
+  AMBAS puertas** (vecinos solo tienen la 1). Fuera de control del sistema.
+  ⏳ **Decisión pendiente de Juan/comité**: suspenderlas (`POST /cards/{no}/suspend`,
+  reversible) o confirmar con el instalador si aún las necesita. NO se tocaron.
+- **Gotcha acceso Orin**: el SSH es **Tailscale SSH con check interactivo** — el agente deja
+  el comando esperando en background, Juan abre el link `login.tailscale.com/a/...` y al
+  autorizar el comando completa solo. El token del bridge vive en `~/access-bridge/.env`
+  de la Orin (no hay copia local).
