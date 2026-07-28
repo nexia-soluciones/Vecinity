@@ -1670,3 +1670,24 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   persona con otro correo. ⏳ **Pendiente**: confirmarlo con él y dar de baja la vieja desde
   `/dashboard/acceso` (la baja conserva su historial). Es el caso exacto que la pantalla
   nueva evita: con "Corregir correo" + enlace habría entrado con su cuenta de siempre.
+
+## Sesión 2026-07-27 — Reservas: selector de personas por botones (fix reporte de vecinos) ✅
+- **Reporte**: al reservar la Alberca "no deja seleccionar la cantidad de personas".
+  Diagnóstico: NO era config de BD (Alberca Catania tiene `requiere_aforo=true`, aforo 5,
+  máx 5/casa; Caty sí pregunta con botones). El bug era el `<input type="number">` controlado
+  en `dashboard/reservas/page.tsx`: su `onChange` forzaba `Math.max(1, parseInt(v || "1"))`,
+  así que **al borrar el "1" en móvil el campo se restauraba a 1 al instante** (se siente
+  como "no me deja"), y escribir sin borrar daba "14" → la RPC rechazaba por máximo.
+  La evidencia en BD lo confirmaba: casi todas las reservas de alberca quedaban con
+  `cantidad_personas=1` (default), incluso familiares de fin de semana.
+- **Fix**: input numérico reemplazado por **botones selectores 1–tope** (mismo patrón visual
+  que duración/hora de esa página); tope = `max_personas_casa ?? capacidad_personas`.
+- **QA E2E** (viewport 390px, Playwright + Chrome del sistema): se activó `requiere_aforo`
+  TEMPORALMENTE en la Alberca de Villa Aurora (DEMO), login con `vecino.demo@`, tap en "3",
+  reserva creada con `cantidad_personas=3` verificado en BD. Todo revertido después:
+  reserva de prueba borrada, área demo de vuelta a `requiere_aforo=false`, y contraseña del
+  usuario demo restaurada por hash (la de `DEMO_VECINO_PASS` en `.env.local` está
+  desactualizada — ⏳ actualizar el .env o rotar la del manual del vendedor).
+- **Gotcha QA**: reservar "hoy" a primera hora falla con "fecha/hora pasada" (la RPC valida
+  contra `now()`, el grid de horas no oculta horas pasadas del día actual) — issue menor de
+  UX preexistente, no bloqueante.

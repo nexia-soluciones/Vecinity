@@ -439,14 +439,24 @@ export default function ReservasPage() {
                       ? `(máx ${area.max_personas_casa} por casa)`
                       : `(aforo ${area.capacidad_personas})`}
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={area.max_personas_casa ?? area.capacidad_personas}
-                    value={personas}
-                    onChange={(e) => setPersonas(Math.max(1, parseInt(e.target.value || "1", 10)))}
-                    className="mt-1 w-full rounded-xl ring-1 ring-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-300 outline-none"
-                  />
+                  <div className="grid grid-cols-5 gap-2 mt-1">
+                    {Array.from(
+                      { length: area.max_personas_casa ?? area.capacidad_personas },
+                      (_, i) => i + 1
+                    ).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setPersonas(n)}
+                        className={`rounded-xl py-2 text-sm font-semibold ring-1 transition ${
+                          personas === n
+                            ? "bg-brand-500 text-white ring-brand-500"
+                            : "bg-white text-slate-600 ring-slate-200 hover:ring-brand-300"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
