@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 docs/distribucion_codigos.csv
+
+# Fotos de saldos: traen nombre de propietario + saldo (PII) — no se pushean
+docs/snapshots/
+
+# Aviso de privacidad en .pages (binario de Pages, se edita en la Mac)
+docs/*.pages

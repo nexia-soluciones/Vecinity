@@ -1,0 +1,49 @@
+{
+  "name": "Vecinity - Pagos recurrentes (diario)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 9 * * *" }
+          ]
+        }
+      },
+      "id": "trigger-diario",
+      "name": "Todos los días 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://supabase.nexiasoluciones.com.mx/rest/v1/rpc/cron_pagos_recurrentes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.VECINITY_ANON_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.VECINITY_ANON_KEY }}" },
+            { "name": "Content-Profile", "value": "vecino" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"p_token\": \"vcn_cron_7Kp2qXm9\", \"p_dry\": false}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "rpc-pagos",
+      "name": "RPC cron_pagos_recurrentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Todos los días 9:00": {
+      "main": [[{ "node": "RPC cron_pagos_recurrentes", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "timezone": "America/Mexico_City", "executionOrder": "v1" }
+}

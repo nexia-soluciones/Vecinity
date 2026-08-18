@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { runOrError } from "@/lib/rpc";
 import { COLOR_CATEGORIA, canon } from "@/lib/categorias";
+import PagosRecurrentes from "./_components/PagosRecurrentes";
 
 type Gasto = {
   id: string;
@@ -413,6 +414,9 @@ export default function GastosPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-slate-800 mt-4">Gastos de la colonia</h1>
+
+        {/* ===== Semáforo de pagos recurrentes (migr. 094) ===== */}
+        <PagosRecurrentes />
 
         {/* ===== Bandeja: gastos del banco sin clasificar ===== */}
         {bandeja.length > 0 && (

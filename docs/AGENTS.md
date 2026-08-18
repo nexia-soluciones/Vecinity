@@ -7,6 +7,67 @@
 > 🔎 **RETOMAR AQUÍ:** ver `REVISION_PENDIENTE.md` — paridad para lanzamiento (deploy ≠ cutover).
 > El review E2E del 2026-06-27 (abajo) verificó BD + 13 rutas contra producción: **~82% al lanzamiento**.
 
+## Alertas de pagos recurrentes al comité — migr. 094 (2026-08-18) ✅ aplicada · ⚠ falta deploy + activar n8n
+
+Pedido del Director: avisar al comité de los servicios básicos por pagar **sin esperar el
+recibo, porque muchas veces no llega**.
+
+**Lo que se midió antes de construir (156 gastos ene-jul + banco jul-ago):**
+- **De 156 gastos, CERO tienen recibo adjunto.** Lo que sí se sube seguido es el **estado de
+  cuenta** (8 cargas, la última el mismo día). → La señal de "ya se pagó" es el **cargo en el
+  banco**, no el recibo. Todo el módulo se apoya en eso.
+- **Los montos NO son iguales cada mes** en luz y agua: CFE $2,184-$7,926 (3.6x), JUMAPA
+  $211-$12,191 (58x). Sí son fijos: Telmex $549, Limpieza $810, Alberca $5,220, Jardinería
+  $6,960, Vigilancia $39,904, Contabilidad $1,850, Basura $4,200. Por eso el match va por
+  **rango histórico + firma del proveedor (RFC)**, no por monto exacto.
+- **CFE y JUMAPA traen DOS recibos por periodo** (dos medidores, pagados el mismo día) →
+  `cargos_por_periodo = 2` y estado `incompleto` cuando llega uno solo. ⚠️ Falta que el comité
+  confirme que son dos medidores.
+- La captura de gastos está **detenida desde el 6-jul** (41 cargos del banco sin clasificar,
+  $139,417), pero el banco llega a hoy: por eso el semáforo se calcula del banco.
+
+**Regla de honestidad (el candado central):** que no aparezca el cargo NO prueba que no se
+pagó. Si el estado de cuenta todavía no cubre la fecha de vencimiento, el estado es
+**`sin_dato`**, nunca `vencido`. Ausencia de dato no es cero.
+
+**Qué se construyó**
+- `supabase/migrations/094_pagos_recurrentes.sql` — `recurring_bills` (catálogo con patrón/RFC,
+  periodicidad, rango de monto, cargos por periodo, gracia) + `recurring_bill_events` (anti-spam
+  del aviso y "pagado fuera del banco" con **motivo obligatorio**) + `_recurring_estado()` (motor)
+  + `pagos_recurrentes_estado()` (UI, gated a comité) + `recurring_bill_marcar_pagado()` +
+  `cron_pagos_recurrentes(token, dry)`. RLS solo comité. Semilla con los 9 servicios reales.
+- `src/app/dashboard/gastos/_components/PagosRecurrentes.tsx` — semáforo arriba de Gastos, con
+  "Ya se pagó (fuera del banco)" y la nota de que el cargo no es prueba de impago.
+- `n8n/pagos_recurrentes_diario.json` + README — `scheduleTrigger` 9:00 → RPC token-gated
+  (mismo patrón que `cron_generar_cobros`). **Se importa y se activa a mano.**
+- `scripts/qa_094_pagos_recurrentes.sh` — 9 pruebas en transacción con ROLLBACK + 4 mutaciones.
+
+**Dos bugs que cazó el harness (no llegaron a producción)**
+1. El rango de monto que acota el match **también escondía el pago doble**: el cargo de Telmex
+   de $1,098 (dos meses) quedaba fuera del techo de $700 → el servicio se habría reportado
+   **vencido justo cuando sí se pagó**. El techo del match ahora va holgado (2.5x) y lo que
+   rebasa el rango se marca `pago_doble` (medido contra el centro del rango, no el techo).
+2. Un pago marcado a mano no tiene cargos en el banco → el conteo de recibos lo dejaba en
+   `incompleto` para siempre. `incompleto` ahora solo aplica cuando el origen es el banco.
+
+**Estado (18-ago):** migración **aplicada en producción** y verificada contra lo vivo: 9/9 en
+verde y **cada mutación tumba exactamente su prueba** (1→3, 2→5, 3→7, 4→6). `next build` en verde.
+Falta: **push/deploy de la UI** y **activar el workflow en n8n a mano**.
+
+**Dos correcciones más al probar contra datos reales:**
+- El texto del aviso decía *"sin cargo desde hace N días"* también cuando **nunca** hubo cargo
+  (JUMAPA) — esa frase inventa un pago que no existe. Ahora dice *"NUNCA ha aparecido un cargo
+  de este proveedor"*, igual que la pantalla.
+- El ensayo en seco (`p_dry`) **escribía** los renglones de control. Ahora no escribe nada: un
+  ensayo tiene que poder correrse las veces que haga falta sin dejar rastro. También devuelve
+  los mensajes tal cual saldrían, para revisar la redacción antes de que le lleguen a tres
+  personas.
+
+**Primera lectura real (18-ago, ensayo en seco):** 4 alertas — 🔴 **JUMAPA** (nunca ha aparecido
+un cargo; el estado de cuenta cargado arranca el 1-jul), 🔴 **Alberca** y 🔴 **Telmex** (último
+3-jul; el de Telmex fue doble), 🔴 **CFE** (último 6-jul). Al día: Basura (26-jul), Vigilancia
+(31-jul), Contabilidad (4-ago), Jardinería (7-ago), Limpieza (17-ago).
+
 ## Signo de mora RFID invertido — migr. 090 (2026-07-22) ✅
 
 Reporte de campo: tarjetas de vecinos que no abrían la pluma. Diagnóstico vía Orin (SDK crudo,
