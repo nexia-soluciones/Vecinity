@@ -1773,3 +1773,106 @@ casa (ya existía) y ahora también los CARGOS como gastos con razón, categorí
   el comando esperando en background, Juan abre el link `login.tailscale.com/a/...` y al
   autorizar el comando completa solo. El token del bridge vive en `~/access-bridge/.env`
   de la Orin (no hay copia local).
+
+## Sesión 2026-08-26 — El «error 400» de la alberca: enlace de Telegram con token de un solo uso (migr. 095) + multa directa (migr. 096) ✅
+
+**El síntoma.** Un vecino real de Villa Aurora (DEMO) confirma una reserva de la
+alberca en Caty y recibe `😔 Request failed with status code 400`.
+
+**La evidencia, en las ejecuciones de n8n** (workflow `QcbjAUiwnW28lXLw`):
+- `23:25:11` — toca ✅ Confirmar en *Alberca · 2026-08-26 · 20:00–21:00* (`res_ok`)
+- `23:25:12` — Caty contesta el 400
+- `23:41` — **Valeria Demo reserva ese MISMO horario, esa misma alberca, y funciona**
+
+Mismo slot, resultado distinto → no era el horario ni el área: era **la identidad
+del chat**. Su teléfono (`5880187175`) estaba ligado a `comite.demo` desde las
+22:33; Carlos Demo es comité y **no tiene casa**, así que `crear_reserva` disparó
+su primer guard —*«Tu perfil no está ligado a una casa todavía»*— y eso llegó a
+Telegram como un número HTTP. Mandó su deep-link **cinco veces** (00:07, 00:13,
+00:14) y las cinco recibió *«tu enlace no es válido o expiró»*, que era falso.
+
+**ES LA SEGUNDA VEZ.** El 3-jul pasó igual (la hija de Juan tocó "Conectar
+Telegram" desde el perfil de él). Se anotó como «GOTCHA familiar» y se arregló con
+un `UPDATE a NULL` a mano. Mientras el único camino de re-enlace pase por quien
+tiene acceso a la base, se vuelve el camino de siempre — y la segunda vez tocó
+delante de un prospecto.
+
+**EL GUARD ERA DELIBERADO Y ESTABA A MEDIAS.** `027 #5` endureció `link_telegram`
+para que un chat ligado no se pudiera secuestrar, y dejó escrito: *«el fix completo
+(token de un solo uso en el deep-link) va en Fase 2»*. Sin esa fase, endurecer el
+destino no servía de nada: el deep-link era `vecino_<profile_id>`, **un id estable
+que nunca caduca**. Por eso el re-enlace tenía que estar prohibido — y prohibirlo
+sin dar alternativa es lo que produjo el 400.
+
+**UN GUARD QUE DEVUELVE `NULL` OBLIGA AL QUE LLAMA A INVENTARSE LA EXPLICACIÓN**, y
+la que se inventó era mentira. Peor que mentir: la sesión seguía viva con la
+identidad del OTRO perfil, así que el vecino operaba como comité sin saberlo.
+
+### Qué se construyó
+
+**Migr. 095 — enlace con token de un solo uso (la Fase 2 de 027).**
+`telegram_link_token()` (sesión autenticada, 15 min, uno vivo por perfil) +
+`telegram_link_consumir(token, chat)`. Como la credencial caduca y muere al usarse,
+**el teléfono SÍ puede cambiar de cuenta**: se libera el perfil anterior, se le dice
+al usuario de quién era (*«antes este Telegram estaba conectado a la cuenta de X»*)
+y queda rastro de quién canjeó qué. Deja de ser secuestro. `link_telegram(uuid,text)`
+sigue viva a propósito: hay deep-links viejos en mensajes y pestañas.
+**El invariante bajó a la BD**: índice único parcial sobre `telegram_chat_id`, porque
+`_bot_perfil` resuelve el chat con `LIMIT 1` y **sin `ORDER BY`** — con un duplicado
+eso es una lotería silenciosa que elige a un humano.
+
+**Migr. 096 — `levantar_multa`: el comité multa lo que vio, sin esperar un reporte.**
+No duplica mecánicas: **DELEGA** en `reportar_incidencia` + `resolver_incidencia`,
+así que el cargo, el tope por colonia y la resolución oficial siguen viviendo en un
+solo lugar. Columna `incident_reports.origen` (`'reporte'` / `'comite'`), informativa:
+ningún filtro de negocio depende de ella. UI en `/dashboard/multas` con monto
+pre-llenado por `sugerir_multa` (base × reincidencia, topado) y **relato obligatorio**
+— una multa sin relato es un cargo que el vecino no puede ni aclarar.
+
+**`caty_bot.js` — que el vecino vea la razón, no el status.** `rpcSafe` sólo miraba
+`e.response.body`, que en n8n viene vacío: **TODA** regla de negocio de Caty —adeudo,
+horario, franja ocupada, aforo— salía como un número HTTP. `msgDeError` busca el
+cuerpo de PostgREST en las cinco rutas que n8n usa y, si no lo encuentra, manda un
+texto amable: **el status crudo no se le enseña nunca al vecino**.
+
+**Villa Aurora tenía CERO categorías de falta** (Catania tiene 7). Sin categoría no
+se podía ni reportar una incidencia ni multar, y el módulo se veía vacío **sin dar
+un solo error**. Sembradas 7 (`scripts/seed_villa_demo_multas.sql`, idempotente).
+
+### Permisos de incidencias/multas (verificado en la BD, sin cambios)
+- **Reportar incidencia: todos** los perfiles aprobados de la colonia — residente,
+  guardia y comité (`reportar_incidencia` y `reportar_incidencia_sin_casa`). No
+  revisa rol.
+- **Convertir en multa: sólo `admin`/`comite`** (`is_admin()`), con tope por colonia
+  y monto sugerido que sube por reincidencia.
+- **Multa directa: sólo comité**, y desde hoy existe (`levantar_multa`).
+
+### Verificación
+- `scripts/qa_095_096.sql` — **23/23** contra producción dentro de `BEGIN … ROLLBACK`
+  (rollback comprobado después: 0 incidencias, 0 tokens, chats intactos).
+- `scripts/qa_095_096_mutaciones.sh` — **6/6 muerden**, control verde. El DDL en
+  Postgres es transaccional, así que cada mutación se aplica DENTRO del arnés y se
+  revierte. La que importa es `m6_traga_la_excepcion` (atrapar el error del cobro
+  «para que no truene»): muerde en *«no deja expediente huérfano»*, o sea que esa
+  aserción sí prueba la atomicidad y no pasa por casualidad.
+- `scripts/qa_caty_bot.mjs` **16/16** · `scripts/qa_caty_mutaciones.mjs` **6/6**,
+  con archivo restaurado idéntico y mutación de control.
+- `npm run build` limpio. Deploy hot de Caty verificado bajando el jsCode VIVO y
+  buscando las 5 frases que sólo existen en el código nuevo.
+
+### Gotchas de esta sesión
+- **`node --check` no aplica a un Code node**: el archivo es el CUERPO de la función
+  (lleva `await` y `return` en el tope) y siempre reporta roto — un check que falla
+  siempre se lee igual que uno que falta. Se parsea con el constructor `AsyncFunction`.
+- **En zsh una variable sin comillas NO se separa en palabras**: mi verificador del
+  deploy revisó los 12 chunks como si fueran uno e imprimió «ausente» **doce veces
+  seguidas**. La app ya estaba desplegada desde el primer intento. Un barrido roto se
+  lee idéntico a un deploy que no llegó — por eso el barrido ahora se para si
+  encuentra menos de 5 chunks. (Ya estaba en MEMORY y lo repetí.)
+- **La ventana de `window.open` se abre ANTES del `await`**: si se abre después de
+  pedir el token, Safari y los bloqueadores la matan por no venir de un gesto.
+
+### Pendiente
+- [ ] Retirar `link_telegram(uuid,text)` cuando no queden deep-links viejos circulando.
+- [ ] Luis re-liga su Telegram desde la app (es la prueba de la puerta nueva por la
+      puerta nueva: su teléfono debe pasar de Carlos Demo a su cuenta, con el aviso).
