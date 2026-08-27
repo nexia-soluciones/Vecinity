@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { runOrError } from "@/lib/rpc";
+import { callRpc, runOrError } from "@/lib/rpc";
 import { SosModal, useSos } from "./sos";
 
 type Profile = {
@@ -18,7 +18,8 @@ type Profile = {
   colonia?: { nombre: string } | null;
 };
 
-// Bot de Telegram (Caty). Deep-link de vinculación: t.me/<bot>?start=vecino_<profileId>
+// Bot de Telegram (Caty). Deep-link de vinculación: t.me/<bot>?start=vecino_<token>
+// donde <token> es de un solo uso y dura 15 min (vecino.telegram_link_token).
 const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT;
 type House = { numero: string; street: string | null; saldo: number };
 // Casa donde NO vivo pero soy propietario (casa rentada) — solo finanzas
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [vigMsg, setVigMsg] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [tgChecking, setTgChecking] = useState(false);
+  const [tgMsg, setTgMsg] = useState<string | null>(null);
   const [resolviendo, setResolviendo] = useState<Set<string>>(new Set());
   const [pendErr, setPendErr] = useState<string | null>(null);
   const [noLeidos, setNoLeidos] = useState(0);
@@ -121,10 +123,26 @@ export default function Dashboard() {
     })();
   }, [router, loadPending]);
 
-  // Abre Caty en Telegram con el deep-link de vinculación (n8n liga el chat).
-  function conectarCaty() {
+  // Abre Caty con un deep-link de UN SOLO USO (migr. 095). Antes se mandaba el
+  // id del perfil: una credencial estable que nunca caduca — quien la tuviera
+  // podía ligar su Telegram a esta cuenta cuando quisiera, y por eso el
+  // re-enlace tenía que estar prohibido. Con un token de 15 minutos el teléfono
+  // sí puede cambiar de cuenta sin abrir ese hueco.
+  async function conectarCaty() {
     if (!profile || !TELEGRAM_BOT) return;
-    window.open(`https://t.me/${TELEGRAM_BOT}?start=vecino_${profile.id}`, "_blank", "noopener");
+    setTgMsg(null);
+    // La ventana se abre ANTES del await: si se abre después, Safari y los
+    // bloqueadores la matan porque ya no hay gesto del usuario.
+    const w = window.open("", "_blank", "noopener");
+    const res = await callRpc<string>("telegram_link_token");
+    if (!res.ok || !res.data) {
+      if (w) w.close();
+      setTgMsg(res.ok ? "No se pudo generar el enlace. Inténtalo de nuevo." : res.error);
+      return;
+    }
+    const url = `https://t.me/${TELEGRAM_BOT}?start=vecino_${res.data}`;
+    if (w) w.location.href = url;
+    else window.open(url, "_blank", "noopener");
   }
   // Re-consulta si ya quedó vinculado (n8n escribe telegram_chat_id de forma asíncrona).
   async function verificarCaty() {
@@ -274,6 +292,11 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+            {tgMsg && (
+              <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 ring-1 ring-red-200">
+                {tgMsg}
+              </p>
+            )}
             <div className="flex gap-2 mt-3">
               <button
                 onClick={conectarCaty}

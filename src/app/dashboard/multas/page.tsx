@@ -9,6 +9,7 @@ import { VerResolucionButton } from "../_components/VerResolucionButton";
 import { generarResolucionOficial } from "../incidencias/resolucion-actions";
 
 type Casa = { id: string; numero: string; saldo: number };
+type Categoria = { id: string; nombre: string; monto_base: number };
 type Multa = {
   id: string;
   descripcion: string | null;
@@ -43,6 +44,7 @@ export default function MultasPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [verHistorial, setVerHistorial] = useState(false);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -52,12 +54,24 @@ export default function MultasPage() {
       if (!user) return router.replace("/login");
       const { data: prof } = await supabaseBrowser
         .from("profiles")
-        .select("role, approval_status")
+        .select("role, approval_status, colonia_id")
         .eq("id", user.id)
         .maybeSingle();
-      const p = prof as unknown as { role: string; approval_status: string } | null;
+      const p = prof as unknown as {
+        role: string;
+        approval_status: string;
+        colonia_id: string | null;
+      } | null;
       if (!p || p.approval_status !== "aprobado") return router.replace("/esperando");
       if (p.role !== "admin" && p.role !== "comite") return router.replace("/dashboard");
+      // El filtro por colonia va explícito: si el perfil no trae colonia, la
+      // lista sale VACÍA en vez de mostrar el catálogo de otra villa.
+      const { data: cats } = await supabaseBrowser
+        .from("fine_categories")
+        .select("id, nombre, monto_base")
+        .eq("colonia_id", p.colonia_id ?? "00000000-0000-0000-0000-000000000000")
+        .order("nombre");
+      setCategorias((cats as unknown as Categoria[]) ?? []);
       setReady(true);
     })();
   }, [router]);
@@ -167,6 +181,12 @@ export default function MultasPage() {
               </span>
             </div>
 
+            <LevantarMulta
+              casa={casa}
+              categorias={categorias}
+              onDone={() => cargarMultas(casa.id)}
+            />
+
             <section className="mt-4">
               <h2 className="text-sm font-bold text-slate-700 mb-2">Multas activas</h2>
               {activas.length === 0 ? (
@@ -229,6 +249,185 @@ export default function MultasPage() {
         )}
       </div>
     </main>
+  );
+}
+
+// Levantar una multa que el comité vio con sus propios ojos, sin esperar a que
+// alguien la reporte. Antes esto no existía y la única salida era escribir en la
+// BD a mano: sin categoría, sin tope, sin resolución oficial y sin rastro.
+// La RPC levantar_multa delega en reportar_incidencia + resolver_incidencia, o
+// sea que el cargo y el tope los sigue calculando un solo lugar.
+function LevantarMulta({
+  casa,
+  categorias,
+  onDone,
+}: {
+  casa: Casa;
+  categorias: Categoria[];
+  onDone: () => Promise<void>;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [catId, setCatId] = useState("");
+  const [monto, setMonto] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [nota, setNota] = useState("");
+  const [sug, setSug] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Al elegir la categoría, el monto se pre-llena con lo que sugiere la BD
+  // (base × reincidencias, topado). Es sugerencia: el comité lo puede cambiar.
+  async function elegirCategoria(id: string) {
+    setCatId(id);
+    setErr(null);
+    setSug(null);
+    if (!id) return setMonto("");
+    const base = categorias.find((c) => c.id === id)?.monto_base;
+    setMonto(base != null ? String(base) : "");
+    const res = await callRpc<{
+      monto_sugerido: number | null;
+      reincidencias: number | null;
+      tope: number | null;
+    }>("sugerir_multa", { p_infractor: casa.id, p_categoria: id });
+    if (!res.ok || !res.data) return;
+    const d = res.data;
+    if (d.monto_sugerido != null) setMonto(String(d.monto_sugerido));
+    const r = Number(d.reincidencias ?? 0);
+    setSug(
+      r > 0
+        ? `Sugerido ${money(Number(d.monto_sugerido))} — es la reincidencia n.º ${r + 1} de esta casa en esta falta.`
+        : `Sugerido ${money(Number(d.monto_sugerido))} — primera vez de esta casa en esta falta.`
+    );
+  }
+
+  async function levantar() {
+    if (busy) return; // evita doble-tap
+    setErr(null);
+    if (!catId) return setErr("Elige la categoría de la falta.");
+    const n = parseFloat(monto);
+    if (!Number.isFinite(n) || n <= 0) return setErr("El monto debe ser mayor a 0.");
+    if (!descripcion.trim())
+      return setErr("Escribe qué pasó: la multa se le va a cobrar a la casa y tiene que poder explicarse.");
+    setBusy(true);
+    const res = await callRpc<{ id: string }>("levantar_multa", {
+      p_infractor: casa.id,
+      p_categoria: catId,
+      p_monto: n,
+      p_descripcion: descripcion.trim(),
+      p_nota: nota.trim() || null,
+    });
+    if (!res.ok) {
+      setBusy(false);
+      return setErr(res.error);
+    }
+    // La resolución oficial se genera igual que en las multas resueltas desde
+    // incidencias; si falla, la multa ya quedó bien y se puede regenerar.
+    try {
+      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token ?? "";
+      if (res.data?.id) await generarResolucionOficial(token, res.data.id);
+    } catch {
+      /* best-effort */
+    }
+    await onDone();
+    setBusy(false);
+    setAbierto(false);
+    setCatId("");
+    setMonto("");
+    setDescripcion("");
+    setNota("");
+    setSug(null);
+  }
+
+  if (categorias.length === 0) {
+    return (
+      <p className="mt-4 text-xs text-slate-500 bg-amber-50 rounded-2xl px-3 py-2.5 ring-1 ring-amber-200">
+        Esta villa no tiene categorías de falta capturadas, así que todavía no se puede levantar una
+        multa. Captúralas primero en el catálogo de faltas.
+      </p>
+    );
+  }
+
+  return (
+    <section className="mt-4">
+      {!abierto ? (
+        <button
+          onClick={() => setAbierto(true)}
+          className="press w-full rounded-2xl bg-white ring-1 ring-amber-200 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 text-left"
+        >
+          ➕ Levantar una multa a la casa {casa.numero}
+        </button>
+      ) : (
+        <div className="rounded-2xl bg-white ring-1 ring-amber-200 p-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800">
+              Nueva multa · casa {casa.numero}
+            </h2>
+            <button
+              onClick={() => {
+                setAbierto(false);
+                setErr(null);
+              }}
+              className="text-xs text-slate-400 hover:text-slate-600"
+            >
+              cerrar
+            </button>
+          </div>
+
+          <select
+            value={catId}
+            onChange={(e) => elegirCategoria(e.target.value)}
+            className="rounded-xl ring-1 ring-slate-200 px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+          >
+            <option value="">Categoría de la falta…</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre} · {money(Number(c.monto_base))}
+              </option>
+            ))}
+          </select>
+
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            rows={2}
+            placeholder="Qué pasó, cuándo y dónde (obligatorio)"
+            className="rounded-xl ring-1 ring-slate-200 px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white resize-none"
+          />
+
+          <div className="flex gap-2">
+            <input
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              type="number"
+              min="1"
+              placeholder="Monto"
+              className="w-32 rounded-xl ring-1 ring-slate-200 px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+            />
+            <input
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              placeholder="Nota del comité (opcional)"
+              className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+            />
+          </div>
+
+          {sug && <p className="text-[11px] text-slate-500">{sug}</p>}
+          {err && <p className="text-xs text-red-600">{err}</p>}
+
+          <button
+            onClick={levantar}
+            disabled={busy}
+            className="press rounded-xl bg-amber-600 text-white text-sm font-semibold py-2.5 hover:bg-amber-700 disabled:opacity-40"
+          >
+            {busy ? "Aplicando…" : `Multar con ${money(parseFloat(monto) || 0)}`}
+          </button>
+          <p className="text-[11px] text-slate-400">
+            Se crea el expediente y el cargo en un solo acto: el saldo de la casa sube{" "}
+            {money(parseFloat(monto) || 0)} y el vecino puede ver la resolución con el motivo.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 

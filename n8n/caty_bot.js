@@ -45,17 +45,50 @@ async function rpc(name, args) {
     body: args, json: true,
   });
 }
+// Saca el mensaje que mandó Postgres cuando la RPC falla.
+//
+// Por qué es tan aparatoso: n8n envuelve el error de axios y el cuerpo de la
+// respuesta aparece en rutas DISTINTAS según la versión. Antes sólo se miraba
+// `e.response.body`, que aquí siempre viene vacío: lo que le llegaba al vecino
+// era «Request failed with status code 400», el texto de axios. Con eso, TODA
+// regla de negocio de la BD —adeudo, horario del área, franja ocupada, aforo,
+// perfil sin casa— se veía como un bug del bot. (26-ago: un vecino confirmó una
+// reserva de la alberca y eso fue lo único que le contestó Caty.)
+function msgDeError(e) {
+  if (!e) return null;
+  const candidatos = [
+    e.response && e.response.data,
+    e.response && e.response.body,
+    e.cause && e.cause.response && e.cause.response.data,
+    e.cause && e.cause.response && e.cause.response.body,
+    e.errorResponse,
+    e.error,
+    e.description,
+  ];
+  for (const c0 of candidatos) {
+    let c = c0;
+    if (!c) continue;
+    if (typeof c === 'string') { try { c = JSON.parse(c); } catch (_) { continue; } }
+    if (c && typeof c === 'object' && c.message) return String(c.message);
+  }
+  // Último recurso: un JSON incrustado en el texto del error ("400 - {...}").
+  const m = String(e.message || '').match(/\{[\s\S]*\}/);
+  if (m) { try { const j = JSON.parse(m[0]); if (j && j.message) return String(j.message); } catch (_) {} }
+  return null;
+}
+
 // rpc que puede fallar con mensaje amable de la BD → {ok:false, msg}
 async function rpcSafe(name, args) {
   try { return { ok: true, data: await rpc(name, args) }; }
   catch (e) {
-    let m = e.message || '';
-    try {
-      const b = e.response && e.response.body;
-      const j = typeof b === 'string' ? JSON.parse(b) : b;
-      if (j && j.message) m = j.message;
-    } catch (_) {}
-    m = m.replace(/^[A-Z0-9]+:\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+    let m = msgDeError(e);
+    if (m) {
+      m = m.replace(/^[A-Z0-9]+:\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+    } else {
+      // Si no pude leer la razón, el vecino NO ve el status crudo: un número
+      // HTTP no le dice nada y hace que un guard correcto parezca una falla.
+      m = 'No pude completar esa acción ahorita. Inténtalo de nuevo en un momento.';
+    }
     return { ok: false, msg: m };
   }
 }
@@ -468,18 +501,53 @@ async function main() {
   if (text.indexOf('/start') === 0) {
     const param = (text.split(/\s+/)[1]) || '';
     if (param.indexOf('vecino_') === 0) {
-      const pid = param.slice(7);
-      if (/^[0-9a-fA-F-]{36}$/.test(pid)) {
+      const val = param.slice(7);
+
+      // Camino nuevo (migr. 095): token de un solo uso, 15 min, emitido con la
+      // sesión abierta en la app. Como caduca y muere al usarse, este teléfono
+      // SÍ puede cambiar de cuenta: se libera el perfil anterior y se dice.
+      if (/^[0-9a-f]{32}$/i.test(val)) {
+        const r = await rpcSafe('telegram_link_consumir', { p_token: val, p_chat: chatId });
+        const res = (r.ok && r.data) || null;
+        if (res && res.ok) {
+          await send(chatId, '✅ ¡Listo, ' + name + '! Soy *Caty* 🛡️' +
+            (res.antes ? '\n\n_Antes este Telegram estaba conectado a la cuenta de ' + res.antes + '; ya quedó en la tuya._' : '') +
+            '\nDesde ahora te aviso por aquí y también me puedes pedir cosas:');
+          await showMenu(chatId, res.nombre || name);
+          return;
+        }
+        const motivo = (res && res.motivo) || 'invalido';
+        await send(chatId,
+          motivo === 'expirado' ? 'Ese enlace ya caducó (dura 15 minutos). Abre la app Vecinity y toca *Conectar Telegram* otra vez.' :
+          motivo === 'usado'    ? 'Ese enlace ya se usó. Abre la app y toca *Conectar Telegram* para generar uno nuevo.' :
+          motivo === 'perfil'   ? 'Tu cuenta todavía no está aprobada por el comité. En cuanto lo esté, vuelve a tocar *Conectar Telegram*.' :
+                                  'Ese enlace no es válido. Abre la app Vecinity y toca *Conectar Telegram*.');
+        return;
+      }
+
+      // Camino viejo (deep-link con el id del perfil). Sigue vivo porque hay
+      // links así en mensajes de Telegram y pestañas abiertas.
+      if (/^[0-9a-fA-F-]{36}$/.test(val)) {
         let nombre = null;
-        try { nombre = await rpc('link_telegram', { p_id: pid, p_chat: chatId }); } catch (e) { nombre = null; }
+        try { nombre = await rpc('link_telegram', { p_id: val, p_chat: chatId }); } catch (e) { nombre = null; }
         if (nombre) {
           await send(chatId, '✅ ¡Listo, ' + name + '! Soy *Caty* 🛡️\nDesde ahora te aviso por aquí y también me puedes pedir cosas:');
           await showMenu(chatId, name);
-        } else {
-          await send(chatId, 'Tu enlace no es válido o expiró. Abre la app Vecinity y vuelve a tocar *Conectar Telegram*.');
+          return;
         }
+        // NULL casi siempre significa "este chat ya es de otro perfil", no que
+        // el enlace expiró. Decir "expiró" mandaba al vecino a picar el mismo
+        // link una y otra vez mientras Caty lo seguía atendiendo con la
+        // identidad del OTRO — que es cómo un residente terminó reservando
+        // como comité y recibiendo un 400.
+        const q = await rpcSafe('bot_perfil', { p_token: BOT, p_chat: chatId });
+        const ya = q.ok && q.data && q.data.nombre;
+        await send(chatId, ya
+          ? 'Este Telegram ya está conectado a la cuenta de *' + ya + '*.\nSi eres otra persona, entra a la app Vecinity con TU cuenta y toca *Conectar Telegram*: ese enlace nuevo pasa este teléfono a tu cuenta.'
+          : 'Tu enlace no es válido o expiró. Abre la app Vecinity y vuelve a tocar *Conectar Telegram*.');
         return;
       }
+
       await send(chatId, 'Código de enlace inválido. Abre la app y toca *Conectar Telegram*.');
       return;
     }

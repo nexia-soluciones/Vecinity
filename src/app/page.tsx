@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { validateInvitation, completeOnboarding, type InvitationInfo } from "./actions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { callRpc } from "@/lib/rpc";
 
 const STEPS = ["Invitación", "Tus datos", "Alertas", "Listo"];
 const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT;
@@ -71,14 +72,24 @@ export default function Onboarding() {
     setStep(2);
   }
 
-  function connectTelegram() {
+  // Deep-link de UN SOLO USO (migr. 095). El signInWithPassword de arriba ya
+  // dejó la sesión abierta, que es lo que el token exige como prueba.
+  async function connectTelegram() {
+    if (!TELEGRAM_BOT || !profileId) return;
     set("telegram", true);
-    if (TELEGRAM_BOT && profileId) {
-      window.open(
-        `https://t.me/${TELEGRAM_BOT}?start=vecino_${profileId}`,
-        "_blank"
-      );
+    // La ventana se abre ANTES del await, o el navegador la bloquea por no
+    // venir de un gesto del usuario.
+    const w = window.open("", "_blank");
+    const res = await callRpc<string>("telegram_link_token");
+    if (!res.ok || !res.data) {
+      if (w) w.close();
+      set("telegram", false);
+      setError(res.ok ? "No se pudo generar el enlace de Telegram." : res.error);
+      return;
     }
+    const url = `https://t.me/${TELEGRAM_BOT}?start=vecino_${res.data}`;
+    if (w) w.location.href = url;
+    else window.open(url, "_blank");
   }
 
   return (
