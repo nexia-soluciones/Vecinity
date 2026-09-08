@@ -24,6 +24,14 @@ Fuera de esos dos puntos compartidos, crear un schema nuevo (`CREATE SCHEMA mifr
 5. **Exponer `mifracc` en PostgREST** con la lista completa confirmada en el paso 1 + `mifracc` agregado. Verificar inmediatamente después que las demás apps (`vecino` incluido) siguen respondiendo antes de dar el cambio por bueno.
 6. **Conectar `operia-mifracc` al schema nuevo:** los clientes Supabase del repo (`src/lib/supabase/browser.ts`, `admin.ts`) están hardcodeados al schema `vecino` → cambiar esa opción a `mifracc`, y crear `.env.local` propio (misma URL/keys de la instancia, apuntando al schema nuevo).
 
+## Paso 2 — completado (2026-09-08, vía SSH directo, verificado)
+
+`CREATE SCHEMA mifracc;` ejecutado directo contra `nexia-supabase_supabase-db-1` (Daniel, por SSH,
+método paso a paso: ejecutar → verificar antes de seguir). Confirmado con
+`SELECT nspname FROM pg_namespace WHERE nspname IN ('mifracc','vecino')`: las dos filas presentes,
+`mifracc` vacío y `vecino` intacto. Sin tocar PostgREST todavía (Paso 5 sigue pendiente, no ejecutar
+hasta terminar Pasos 3-4).
+
 ## Decisión: estructura primero, sin datos reales
 
 No copiar datos reales de Vecinity a `mifracc`, ni ahora ni en el corto plazo:
