@@ -126,6 +126,21 @@ en vez de "villa/condominio", donde el contexto de UI lo amerite. Se decide junt
 completo de roles (Residente/Comité/Administrador) cuando se diseñe el modelo de entitlements,
 no como parte del reemplazo mecánico de schema de hoy.
 
+## Paso 3.3 — completado (2026-09-08, reemplazo mecánico verificado)
+
+Reemplazo vecino→mifracc aplicado solo en `supabase/migrations_mifracc/` (schema, search_path,
+GRANTs, buckets/políticas de Storage — 3,089 reemplazos en 96 archivos). Verificado con grep:
+cero ocurrencias de schema/bucket `vecino` restantes en el set principal; lo único que queda son
+los ~380 casos de dato de negocio/UI/comentario que se dejaron intactos a propósito. Original
+`supabase/migrations/` confirmado sin cambios (`git diff --stat` vacío). Los 3 archivos excluidos
+(`073_frente_por_tipo.sql`, `033b_reglamento_seed.sql`, `005_fix_handle_new_user.sql`) están en
+`supabase/migrations_mifracc/_excluidos/` con TODO explicando el motivo. Nada ejecutado contra
+la base de datos.
+
+Siguiente: construir la migración nueva y separada para el trigger de `auth.users` de mifracc
+(guard `app='mifracc'`, sin tocar el trigger existente de Vecinity) — investigar primero toda la
+cadena de `handle_new_user` en las 99 migraciones originales antes de escribir nada.
+
 ## Próximo paso inmediato
 
 Daniel arranca el paso 1 (verificar que la app corre) desde Claude Code + VS Code. Cowork prepara, si hace falta, el contenido del `.env.local` y cualquier ajuste de código que el arranque revele.
