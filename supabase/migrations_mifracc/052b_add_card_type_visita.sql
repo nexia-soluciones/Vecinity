@@ -1,0 +1,11 @@
+-- ============================================================
+-- MIFRACC · Agrega el valor 'visita' al enum card_type
+-- En el historial original de Vecinity, este ALTER TYPE se ejecutó como
+-- una llamada suelta fuera de las 99 migraciones numeradas (mismo patrón
+-- que el trigger de auth.users en 005). 051_credenciales.sql crea
+-- card_type con solo ('vehicular','peatonal'); 053_tarjeta_visita.sql
+-- ya asume que 'visita' existe. Debe aplicarse en su propia transacción,
+-- antes de 053 — ALTER TYPE ADD VALUE no puede usarse en la misma
+-- transacción que su primer uso.
+-- ============================================================
+ALTER TYPE mifracc.card_type ADD VALUE 'visita';

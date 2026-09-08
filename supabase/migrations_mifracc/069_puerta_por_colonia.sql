@@ -8,13 +8,15 @@
 --
 -- (Complemento operativo fuera de esta migración: rotar las contraseñas de
 --  las cuentas demo publicadas en la bitácora.)
+--
+-- NOTA (mifracc): el backfill original que sembraba colonia_id con el UUID
+-- real de Villa Catania se movió a _excluidos/069_datos_reales.sql — mifracc
+-- no tiene esa colonia (ni ninguna real) sembrada. El resto del archivo
+-- (columna, gate, RPCs, RLS) no depende de ese backfill.
 
 -- 1. El dispositivo declara su colonia -------------------------------------------
 ALTER TABLE mifracc.camera_state
   ADD COLUMN IF NOT EXISTS colonia_id uuid REFERENCES mifracc.colonias(id);
-UPDATE mifracc.camera_state
-   SET colonia_id = 'ce43b59c-529b-4960-8dd7-d975e43ac2fb'  -- Villa Catania
- WHERE camera = 'peatonal' AND colonia_id IS NULL;
 
 -- 2. Gate por dispositivo: perfil aprobado Y de la colonia del dispositivo --------
 DROP FUNCTION IF EXISTS mifracc.is_door_operator();

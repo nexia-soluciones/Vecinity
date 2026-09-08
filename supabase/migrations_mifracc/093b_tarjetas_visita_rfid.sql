@@ -1,13 +1,11 @@
--- 093 — Tarjetas de VISITA en el ciclo RFID completo (aplicada en prod 2026-08-05)
---
--- Bug de fondo: el flujo de entrega de tarjetas de visita nunca creaba la fila
--- en mifracc.rfid_tags, y rfid_reconcile_plan solo enrolaba tipo='vehiculo'.
--- Resultado: tarjeta pagada/impresa/entregada que el panel DS-K2812 no conocía
--- ("tarjeta no existe" → no abre). 8 de 11 visitas entregadas estaban muertas;
--- las 3 vivas eran INSERTs manuales disfrazados de 'vehiculo'.
---
--- NOTA: el ALTER TYPE debe correr en su propia transacción, ANTES del resto.
-ALTER TYPE mifracc.tag_type ADD VALUE IF NOT EXISTS 'visita';
+-- ============================================================
+-- MIFRACC · 093b — split de 093_tarjetas_visita_rfid.sql (resto del archivo)
+-- Requiere que 093a ya se haya aplicado (y comprometido) antes que este.
+-- Contenido idéntico a 093_tarjetas_visita_rfid.sql líneas 12 en adelante
+-- (el backfill directo y las funciones/trigger que sí pueden usar 'visita'
+-- en la misma transacción por estar dentro de cuerpos de función, evaluados
+-- hasta su ejecución).
+-- ============================================================
 
 -- ── Backfill: visitas entregadas sin tag ─────────────────────────────────────
 INSERT INTO mifracc.rfid_tags (colonia_id, house_id, codigo_tag, tipo, status, impresa_at)
