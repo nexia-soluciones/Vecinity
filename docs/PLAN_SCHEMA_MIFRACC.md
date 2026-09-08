@@ -173,6 +173,50 @@ bank_ref_map, payment_plans, comunicados, reglamento). `vecino`: 79 tablas, sin 
 ningún lote. Cero errores en 35 archivos.
 Siguiente archivo en la secuencia: `035_recibos_abonos.sql`.
 
+## Aplicación de las 97 migraciones — COMPLETADA (2026-09-08)
+
+Las 97 migraciones de `supabase/migrations_mifracc/` quedaron aplicadas contra la base real,
+en tandas crecientes (1 → 4 → 10 → 20 → 25 → 24 → 8), cada una verificada con conteo de tablas
+antes/después y detención inmediata ante cualquier error. `vecino` terminó exactamente igual
+que empezó: 79 tablas, sin ningún cambio en todo el proceso. `mifracc` terminó con 78 tablas.
+
+**Reparaciones descubiertas y resueltas durante el proceso** (cosas que existían en producción
+de `vecino` fuera del historial de migraciones versionado — el mismo patrón se repitió 6 veces):
+- `097_mifracc_handle_new_user.sql` — trigger nuevo de `auth.users` (guard `app='mifracc'`,
+  no tocó el trigger de vecino). Aplicado y confirmado ENABLED.
+- `052b_add_card_type_visita.sql` — `ALTER TYPE card_type ADD VALUE 'visita'` (el original
+  se corrió suelto en producción, nunca en una migración).
+- `093a_tag_type_visita.sql` + `093a2_rfid_tags_columnas.sql` — mismo patrón: `ALTER TYPE
+  tag_type ADD VALUE 'visita'` + 3 columnas huérfanas de `rfid_tags` (`impresa_at`,
+  `enrolled_at`, `revoked_at`) nunca capturadas en ninguna migración.
+- `098_colonias_umbral_servicios.sql` — columna huérfana de `colonias`, mismo patrón.
+- `069_puerta_por_colonia.sql`, `070_aviso_privacidad.sql`, `073_frente_por_tipo.sql`,
+  `094_pagos_recurrentes.sql` — recortados: se aplicó el schema (tablas/funciones/columnas),
+  se excluyó el dato real de Villa Catania (UUIDs/URLs/textos legales/montos reales) a
+  `_excluidos/` con TODO, pendiente de una colonia demo sintética.
+- `033b_reglamento_seed.sql`, `073` (versión completa original) — excluidos por completo
+  desde el Paso 3 (texto legal real / URLs reales), documentado antes de aplicar nada.
+- `005_fix_handle_new_user.sql` — excluido por completo (reemplazado por 097).
+
+**Pendiente, documentado, no bloqueante:**
+- `rfid_inventory` — tabla huérfana en `vecino` (nunca referenciada en las 97 migraciones ni
+  en el código rastreado); no se replicó en `mifracc`. Decidir después si se necesita, una vez
+  que se entienda para qué se usa hoy en producción.
+- Sembrar `mifracc` con datos sintéticos/demo (colonia demo, tarjetas, avisos, gastos
+  recurrentes) para los 5 bloques que quedaron en `_excluidos/` — pendiente del Paso 4 de
+  "Orden acordado para retomar" (analizar datos reales de `vecino` para diseñar el generador
+  sintético).
+
+## Próximo paso: Paso 5 — exponer `mifracc` en PostgREST
+
+Es el paso de mayor riesgo del plan completo: el `ALTER ROLE authenticator SET
+pgrst.db_schemas` reemplaza TODA la lista de schemas expuestos para las ~22 apps de la
+instancia compartida. El comando ya está preparado (ver más arriba, sección "Paso 1 —
+completado"), con `mifracc` agregado al final de la lista confirmada en vivo. Antes de
+ejecutarlo: reconfirmar la lista en vivo una vez más (por si cambió algo desde el 28 de
+agosto), ejecutar, y verificar de inmediato que TODAS las apps siguen respondiendo
+(especialmente `vecino`, que es la única con tráfico real de producción).
+
 ## Próximo paso inmediato
 
 Daniel arranca el paso 1 (verificar que la app corre) desde Claude Code + VS Code. Cowork prepara, si hace falta, el contenido del `.env.local` y cualquier ajuste de código que el arranque revele.
