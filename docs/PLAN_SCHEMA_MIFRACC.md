@@ -99,6 +99,33 @@ Antes de tocar el schema, primero confirmar que la app corre bien tal como está
 3. **Ejecutar el resto del plan de schema** (pasos 2-6 de este documento) desde Claude Code, ahora con el MCP disponible.
 4. **Analizar los datos reales de `vecino`** (solo lectura, vía MCP) para entender formas/rangos reales de los datos (casas, saldos, vehículos, etc.) y diseñar un generador de datos sintéticos/dummy para sembrar `mifracc` — nunca copiar datos reales, solo usarlos de referencia para que lo sintético sea realista.
 
+## Paso 3 en curso (2026-09-08) — hallazgos y decisiones del mapeo `vecino`→`mifracc`
+
+Claude Code mapeó las ~4,050 ocurrencias de "vecino" en las 99 migraciones copiadas a
+`supabase/migrations_mifracc/` (sin editar nada todavía). Se dividen en: (1) ~3,960 referencias
+de schema/funciones/RLS — mecánico, seguro reemplazar; (2) buckets de Storage y sus políticas —
+también mecánico; (3) 11 casos donde "vecino" es dato de negocio, texto de UI, o comentario —
+NO tocar con reemplazo ciego; (4) ~370 comentarios en español usando "vecino" como palabra común
+— se dejan tal cual, no forzar el español.
+
+**Decisiones (Daniel, 2026-09-08):**
+- **`073_frente_por_tipo.sql` (URL real de imágenes de Villa Catania en el bucket
+  `vecino-tarjetas`) queda EXCLUIDA de mifracc por ahora.** Pendiente: resolver cuando
+  definamos cómo sembrar imágenes sintéticas de tarjetas.
+- **`033b_reglamento_seed.sql` (texto legal real del reglamento de un cliente real) queda
+  EXCLUIDA de mifracc por ahora.** La estructura de tabla `reglamento` se puede recrear más
+  adelante con texto de ejemplo genérico.
+- **`005_fix_handle_new_user.sql`** no se copia tal cual (su guard es `app='vecino'`, específico
+  del trigger compartido de Vecinity) — se investiga la cadena completa de `handle_new_user`
+  y se escribe UNA migración nueva para mifracc con guard `app='mifracc'`, sin tocar el trigger
+  existente de Vecinity.
+
+**Pendiente de diseño (NO para hoy, para la fase de entitlements):** vocabulario propio de
+producto para diferenciar miFracc de Vecinity — "Residente" en vez de "vecino", "Fraccionamiento"
+en vez de "villa/condominio", donde el contexto de UI lo amerite. Se decide junto con el glosario
+completo de roles (Residente/Comité/Administrador) cuando se diseñe el modelo de entitlements,
+no como parte del reemplazo mecánico de schema de hoy.
+
 ## Próximo paso inmediato
 
 Daniel arranca el paso 1 (verificar que la app corre) desde Claude Code + VS Code. Cowork prepara, si hace falta, el contenido del `.env.local` y cualquier ajuste de código que el arranque revele.
