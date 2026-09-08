@@ -158,6 +158,19 @@ Esto construye las tablas/funciones/RLS reales dentro de `mifracc`. Es el paso m
 que falta antes del Paso 5 (exponer en PostgREST) — se atomiza aparte, con verificación de
 que nada toca `vecino` en cada tanda.
 
+## Aplicación real de las migraciones — en curso (2026-09-08)
+
+Método: uno primero (validar cero errores), luego lotes chicos crecientes, cada uno vía
+POST /pg/query con SERVICE_ROLE_KEY (psql/puerto 5432 bloqueado por firewall desde fuera del
+servidor, confirmado en nexia-tools/MCP_SUPABASE_REGLAS.md). Antes de cada lote: revisión de que
+todo DDL esté explícitamente calificado con `mifracc.` (nunca sin schema, que caería en
+`public`). Después de cada lote: conteo de tablas de `mifracc` y `vecino` para confirmar avance
+esperado y cero cambio en `vecino`.
+
+Avance: 5/97 archivos aplicados (001, 002, 003, 004, 006 — 005 excluido a propósito).
+`mifracc`: 0 → 5 → 49 tablas. `vecino`: 79 tablas, sin cambio en ningún punto. Cero errores.
+Siguiente archivo en la secuencia: `007_notifications.sql`.
+
 ## Próximo paso inmediato
 
 Daniel arranca el paso 1 (verificar que la app corre) desde Claude Code + VS Code. Cowork prepara, si hace falta, el contenido del `.env.local` y cualquier ajuste de código que el arranque revele.
