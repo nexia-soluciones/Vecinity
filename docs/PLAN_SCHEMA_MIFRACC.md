@@ -141,6 +141,23 @@ Siguiente: construir la migración nueva y separada para el trigger de `auth.use
 (guard `app='mifracc'`, sin tocar el trigger existente de Vecinity) — investigar primero toda la
 cadena de `handle_new_user` en las 99 migraciones originales antes de escribir nada.
 
+## Paso 4 — completado (2026-09-08, vía SSH directo, verificado)
+
+GRANTs aplicados sobre el schema `mifracc` (vacío en ese momento, cero tablas): `GRANT USAGE`
+a anon/authenticated/service_role + `ALTER DEFAULT PRIVILEGES` para tablas y secuencias (mismo
+template que usan smed/heijunka, de `nexia-tools/MCP_SUPABASE_REGLAS.md`). Verificado con
+`has_schema_privilege`: `mifracc` en `true`/`true` para anon/authenticated; `vecino` sin cambios
+(`true`/`true`, como ya tenía). Se hizo ANTES de aplicar las 97 migraciones a propósito — así
+`ALTER DEFAULT PRIVILEGES` cubre automáticamente cada tabla que se cree después, sin repetir
+GRANT tabla por tabla.
+
+**Paso pendiente no numerado explícitamente en el plan original:** aplicar de verdad las 97
+migraciones generadas en `supabase/migrations_mifracc/` (96 renombradas + 097 del trigger)
+contra el schema `mifracc` — hasta ahora solo existen como archivos, nunca se ejecutaron.
+Esto construye las tablas/funciones/RLS reales dentro de `mifracc`. Es el paso más grande
+que falta antes del Paso 5 (exponer en PostgREST) — se atomiza aparte, con verificación de
+que nada toca `vecino` en cada tanda.
+
 ## Próximo paso inmediato
 
 Daniel arranca el paso 1 (verificar que la app corre) desde Claude Code + VS Code. Cowork prepara, si hace falta, el contenido del `.env.local` y cualquier ajuste de código que el arranque revele.
