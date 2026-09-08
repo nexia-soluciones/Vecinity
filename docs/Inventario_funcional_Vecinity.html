@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventario funcional Vecinity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f5f1;
+  --surface:#ffffff;
+  --surface-2:#f1efe9;
+  --ink:#20241f;
+  --ink-soft:#565b53;
+  --border:#e1ddd2;
+  --accent:#2f5d50;
+  --accent-soft:#e7efe9;
+  --amber:#b5762a;
+  --amber-soft:#f6ecdc;
+
+  --role-residente:#2f5d50;
+  --role-residente-bg:#e7efe9;
+  --role-comite:#6b4e8e;
+  --role-comite-bg:#efe8f5;
+  --role-guardia:#b5762a;
+  --role-guardia-bg:#f6ecdc;
+  --role-todos:#4a5568;
+  --role-todos-bg:#eceef1;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191b17;
+    --surface:#212420;
+    --surface-2:#272a25;
+    --ink:#eae7de;
+    --ink-soft:#a9ab9f;
+    --border:#383c34;
+    --accent:#7fb8a3;
+    --accent-soft:#25322c;
+    --amber:#e0a765;
+    --amber-soft:#332a1a;
+
+    --role-residente:#7fb8a3;
+    --role-residente-bg:#213028;
+    --role-comite:#c4a9e0;
+    --role-comite-bg:#2c2438;
+    --role-guardia:#e0a765;
+    --role-guardia-bg:#332a1a;
+    --role-todos:#b7bcc7;
+    --role-todos-bg:#262a30;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191b17;
+  --surface:#212420;
+  --surface-2:#272a25;
+  --ink:#eae7de;
+  --ink-soft:#a9ab9f;
+  --border:#383c34;
+  --accent:#7fb8a3;
+  --accent-soft:#25322c;
+  --amber:#e0a765;
+  --amber-soft:#332a1a;
+
+  --role-residente:#7fb8a3;
+  --role-residente-bg:#213028;
+  --role-comite:#c4a9e0;
+  --role-comite-bg:#2c2438;
+  --role-guardia:#e0a765;
+  --role-guardia-bg:#332a1a;
+  --role-todos:#b7bcc7;
+  --role-todos-bg:#262a30;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Source Sans 3", "Public Sans", -apple-system, sans-serif;
+  line-height:1.55;
+}
+.page{
+  max-width:880px;
+  margin:0 auto;
+  padding:64px 32px 120px;
+}
+h1,h2,h3{
+  font-family:"Fraunces", "Source Serif 4", Georgia, serif;
+  color:var(--ink);
+  text-wrap:balance;
+  font-weight:600;
+}
+.cover{
+  margin-bottom:56px;
+  padding-bottom:40px;
+  border-bottom:1px solid var(--border);
+}
+.eyebrow{
+  font-size:.78rem;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  color:var(--accent);
+  font-weight:600;
+  margin-bottom:14px;
+}
+.cover h1{
+  font-size:2.6rem;
+  line-height:1.08;
+  margin:0 0 14px;
+}
+.cover .sub{
+  font-size:1.08rem;
+  color:var(--ink-soft);
+  max-width:60ch;
+}
+.meta{
+  margin-top:24px;
+  display:flex;
+  gap:28px;
+  flex-wrap:wrap;
+  font-size:.86rem;
+  color:var(--ink-soft);
+}
+.meta strong{color:var(--ink);font-weight:600;}
+
+nav.toc{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:22px 26px;
+  margin-bottom:52px;
+}
+nav.toc .eyebrow{margin-bottom:10px;}
+nav.toc ol{
+  margin:0;
+  padding-left:1.2em;
+  columns:2;
+  column-gap:32px;
+  font-size:.92rem;
+}
+nav.toc li{margin-bottom:6px;break-inside:avoid;}
+nav.toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--border);}
+nav.toc a:hover{color:var(--accent);border-color:var(--accent);}
+
+section{margin-bottom:52px;}
+section h2{
+  font-size:1.5rem;
+  margin:0 0 6px;
+  padding-top:8px;
+  border-top:2px solid var(--accent);
+}
+section .section-num{
+  color:var(--accent);
+  font-variant-numeric:tabular-nums;
+  margin-right:.4em;
+}
+section > .desc{
+  color:var(--ink-soft);
+  font-size:.96rem;
+  margin:0 0 20px;
+  max-width:68ch;
+}
+h3{font-size:1.1rem;margin:28px 0 10px;}
+
+.roles-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:14px;
+  margin:24px 0 8px;
+}
+.role-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px 18px;
+}
+.role-card .role-tag{
+  display:inline-block;
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.03em;
+  padding:3px 9px;
+  border-radius:99px;
+  margin-bottom:8px;
+}
+.role-card p{margin:0;font-size:.87rem;color:var(--ink-soft);}
+.role-card .num{
+  font-family:"Fraunces",serif;
+  font-size:1.6rem;
+  color:var(--ink-soft);
+  opacity:.35;
+  float:right;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  font-size:.9rem;
+  margin-bottom:6px;
+}
+caption{
+  text-align:left;
+  font-size:.82rem;
+  color:var(--ink-soft);
+  margin-bottom:8px;
+  font-style:italic;
+}
+th{
+  text-align:left;
+  background:var(--surface-2);
+  color:var(--ink);
+  font-family:"Fraunces",serif;
+  font-weight:600;
+  font-size:.82rem;
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+}
+td{
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+tr:last-child td{border-bottom:none;}
+td:first-child{font-weight:600;white-space:nowrap;}
+.tbl-wrap{overflow-x:auto;}
+
+.pill{
+  display:inline-block;
+  font-size:.72rem;
+  font-weight:700;
+  padding:2px 9px;
+  border-radius:99px;
+  white-space:nowrap;
+}
+.pill-residente{background:var(--role-residente-bg);color:var(--role-residente);}
+.pill-comite{background:var(--role-comite-bg);color:var(--role-comite);}
+.pill-guardia{background:var(--role-guardia-bg);color:var(--role-guardia);}
+.pill-todos{background:var(--role-todos-bg);color:var(--role-todos);}
+
+.callout{
+  background:var(--amber-soft);
+  border-left:3px solid var(--amber);
+  border-radius:0 8px 8px 0;
+  padding:14px 18px;
+  font-size:.9rem;
+  margin:18px 0;
+}
+.callout strong{color:var(--ink);}
+
+.faltantes{
+  list-style:none;
+  padding:0;
+  margin:0;
+  display:grid;
+  gap:10px;
+}
+.faltantes li{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:3px solid var(--ink-soft);
+  border-radius:0 8px 8px 0;
+  padding:12px 16px;
+  font-size:.9rem;
+}
+
+.steps{
+  counter-reset:step;
+  list-style:none;
+  padding:0;
+  margin:0;
+  display:grid;
+  gap:14px;
+}
+.steps li{
+  position:relative;
+  padding-left:44px;
+  font-size:.92rem;
+}
+.steps li::before{
+  counter-increment:step;
+  content:counter(step);
+  position:absolute;
+  left:0;top:0;
+  width:30px;height:30px;
+  border-radius:50%;
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-family:"Fraunces",serif;
+  font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;
+}
+
+footer{
+  margin-top:64px;
+  padding-top:20px;
+  border-top:1px solid var(--border);
+  color:var(--ink-soft);
+  font-size:.8rem;
+}
+
+@media print{
+  body{background:#fff;}
+  .page{max-width:none;padding:0 24px;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">OperIA · miFracc — insumo de trabajo</div>
+    <h1>Inventario funcional de Vecinity, por rol</h1>
+    <p class="sub">Qué hace hoy el sistema, organizado por quién lo usa — preparado para cruzarlo con el levantamiento funcional de Lombardía junto con Victoria.</p>
+    <div class="meta">
+      <span><strong>Fecha</strong> · 28 de agosto de 2026</span>
+      <span><strong>Fuente</strong> · Manuales de usuario y código de Vecinity</span>
+      <span><strong>Piloto</strong> · Villa Catania / La Cantera</span>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <div class="eyebrow">Contenido</div>
+    <ol>
+      <li><a href="#roles">Roles que existen hoy</a></li>
+      <li><a href="#todos">Funciones para cualquier registrado</a></li>
+      <li><a href="#residente">Rol: Residente</a></li>
+      <li><a href="#comite">Rol: Comité / Administrador</a></li>
+      <li><a href="#guardia">Rol: Guardia (caseta)</a></li>
+      <li><a href="#automatico">Funciones automatizadas / transversales</a></li>
+      <li><a href="#faltante">Lo que todavía no existe</a></li>
+      <li><a href="#dinamica">Cómo usar esto con Victoria</a></li>
+    </ol>
+  </nav>
+
+  <section id="roles">
+    <h2><span class="section-num">01</span>Roles que existen hoy en el sistema</h2>
+    <p class="desc">El sistema reconoce tres roles con pantallas propias, y dos condiciones especiales que no son roles nuevos pero cambian lo que alguien puede ver.</p>
+
+    <div class="roles-grid">
+      <div class="role-card">
+        <span class="num">1</span>
+        <span class="role-tag pill-residente">RESIDENTE</span>
+        <p>Cualquiera que vive en una casa de la colonia. Rol por default — dueño o inquilino.</p>
+      </div>
+      <div class="role-card">
+        <span class="num">2</span>
+        <span class="role-tag pill-comite">COMITÉ / ADMIN</span>
+        <p>Mesa directiva. Tiene todo lo de residente, más el panel de gobierno. Comité y admin son funcionalmente equivalentes hoy.</p>
+      </div>
+      <div class="role-card">
+        <span class="num">3</span>
+        <span class="role-tag pill-guardia">GUARDIA</span>
+        <p>Personal de caseta. Sin panel de residente — entra directo a la pantalla de vigilancia.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Capitán de zona</strong> existe en el modelo de datos (recibe alertas SOS de su calle) pero no tiene pantallas propias — su función la ejerce un residente marcado como capitán de su zona, no es un rol aparte con permisos distintos.
+    </div>
+
+    <h3>Dos condiciones que no son roles nuevos</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Condición</th><th>Qué cambia</th></tr>
+      <tr><td>Propietario no residente<br><span style="font-weight:400;color:var(--ink-soft);font-size:.85em;">código <code>PROP-&lt;casa&gt;</code></span></td><td>Dueño de una casa que no vive ahí (la renta). Sigue siendo rol "residente", pero solo ve estado de cuenta y pagos de su casa — sin visitas, SOS, ni el resto de funciones de quien sí vive ahí.</td></tr>
+      <tr><td>Vigilante voluntario</td><td>Un residente se postula a la red de seguridad vecinal. Sigue siendo residente; además recibe alertas SOS de su zona y puede marcar que ya está atendiendo.</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <strong>Para el cruce con Lombardía:</strong> los cuatro roles que mencionaste (administrador, residente, comité, vigilancia) ya existen todos. Lo que quizás no tenga equivalente directo en Lombardía es la separación comité/admin (hoy casi idénticos) y el concepto de propietario no residente.
+    </div>
+  </section>
+
+  <section id="todos">
+    <h2><span class="section-num">02</span>Funciones para cualquier persona registrada</h2>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Iniciar sesión / recuperar contraseña</td><td>Correo y contraseña; recuperación por correo o por el bot de Telegram</td></tr>
+      <tr><td>Conectar Telegram (bot "Caty")</td><td>Recibe alertas y puede pedirle cosas al bot por chat — ver sección 6</td></tr>
+      <tr><td>Aviso de privacidad (LFPDPPP)</td><td>Se muestra al entrar por primera vez; la aceptación queda registrada con fecha y versión</td></tr>
+      <tr><td>Instalar la app en el teléfono</td><td>Como PWA, sin pasar por tienda de apps</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section id="residente">
+    <h2><span class="section-num">03</span><span class="pill pill-residente" style="margin-right:10px;">RESIDENTE</span>Rol: Residente (vecino)</h2>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Ver su estado de cuenta</td><td>Saldo actual, historial de movimientos (cuotas, recargos, multas, abonos), descarga de recibos</td></tr>
+      <tr><td>Pagar / subir comprobante</td><td>Sube foto de su comprobante; el comité lo aprueba y el saldo se actualiza solo. También por Telegram</td></tr>
+      <tr><td>Registrar su rostro (puerta peatonal)</td><td>Foto tipo credencial; al aprobarse, la puerta lo reconoce y abre sola (hasta 10 rostros por casa)</td></tr>
+      <tr><td>Reservar áreas comunes</td><td>Ve disponibilidad, reserva (solo si está al corriente), cancela, ve calendario general</td></tr>
+      <tr><td>Registrar visitas (pase QR)</td><td>Genera pase QR para un invitado, lo comparte por WhatsApp — el invitado no instala nada</td></tr>
+      <tr><td>Cámara de la puerta y apertura remota</td><td>Ve la cámara en vivo y abre con confirmación de dos pasos; cada apertura queda firmada con su nombre</td></tr>
+      <tr><td>Dar de alta sus vehículos</td><td>Marca, modelo, placa, color; pendiente hasta aprobación del comité y asignación de tarjeta RFID</td></tr>
+      <tr><td>Reportar una incidencia</td><td>Con foto y ubicación opcional, por casa o por placa. Por placa: la IA lee y verifica — 1ª vez amonestación, reincidencia genera propuesta de multa</td></tr>
+      <tr><td>Botón de pánico (SOS)</td><td>Alerta instantánea con nombre, casa y ubicación al comité de zona, capitán de calle y vigilantes voluntarios</td></tr>
+      <tr><td>Ver comunicados</td><td>Avisos oficiales, públicos o dirigidos a su casa</td></tr>
+      <tr><td>Postularse como vigilante voluntario</td><td>Se une a la red de respuesta a SOS de la colonia</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section id="comite">
+    <h2><span class="section-num">04</span><span class="pill pill-comite" style="margin-right:10px;">COMITÉ / ADMIN</span>Rol: Comité / Administrador</h2>
+    <p class="desc">Tiene <strong>todas</strong> las funciones de residente, más el panel de gobierno de la colonia.</p>
+
+    <h3>Aprobaciones (bandeja central)</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Qué aprueba</th><th>Qué revisa</th></tr>
+      <tr><td>Nuevos vecinos</td><td>Que el nombre corresponda a la casa de la invitación</td></tr>
+      <tr><td>Comprobantes de pago</td><td>Foto legible, monto y fecha — al aprobar, el saldo se actualiza solo</td></tr>
+      <tr><td>Vehículos</td><td>Placa y datos — puede asignar tarjeta RFID al aprobar</td></tr>
+      <tr><td>Incidencias reportadas</td><td>Decide amonestación o multa</td></tr>
+      <tr><td>Propuestas de multa (IA)</td><td>Reincidencia verificada por placa — se aprueba con un voto</td></tr>
+      <tr><td>Rostros para la puerta</td><td>Revisa la foto antes de activarla en la terminal</td></tr>
+    </table>
+    </div>
+
+    <h3>Cobranza y finanzas</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Generar cuota mensual</td><td>Un toque genera el cargo del mes a todas las casas (no duplica)</td></tr>
+      <tr><td>Aplicar recargos</td><td>A casas vencidas, según reglamento</td></tr>
+      <tr><td>Convenios de pago</td><td>Para adeudo grande; mientras esté activo, la casa conserva accesos</td></tr>
+      <tr><td>Gastos de la colonia</td><td>Registro por categoría con comprobante, desglose, exportación CSV; sugiere categoría</td></tr>
+      <tr><td>Conciliación bancaria</td><td>Sube estado de cuenta del banco (Excel), detecta duplicados, sugiere a qué casa asignar cada pago</td></tr>
+      <tr><td>Auditoría de pagos</td><td>Quién subió y quién aprobó cada comprobante</td></tr>
+      <tr><td>Estado de cuenta de cualquier casa</td><td>Misma vista que el vecino, de toda la colonia</td></tr>
+      <tr><td>Proyectos de la colonia</td><td>Alta de proyectos con documentos y gastos ligados, para asamblea</td></tr>
+      <tr><td>Reporte de multas (IA)</td><td>Elige un mes → resumen, desglose, reincidencias y observaciones</td></tr>
+    </table>
+    </div>
+
+    <h3>Multas</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Corregir una multa</td><td>Ajusta monto/casa; cargo y saldo se corrigen de una sola vez, con nota obligatoria</td></tr>
+      <tr><td>Cancelar una multa</td><td>No se borra — queda marcada rechazada (auditoría), el saldo se revierte</td></tr>
+    </table>
+    </div>
+
+    <h3>Comunicación y áreas comunes</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Crear comunicados</td><td>Público o dirigido a casas específicas; se envía por Telegram; ve lecturas</td></tr>
+      <tr><td>Configurar reglas por área común</td><td>Horario, costo, depósito, aforo, aprobación automática o manual</td></tr>
+      <tr><td>Agregar áreas nuevas</td><td>No limitado a un catálogo fijo</td></tr>
+      <tr><td>Bandeja de reservas por aprobar</td><td>Para áreas con aprobación manual</td></tr>
+    </table>
+    </div>
+
+    <h3>Credenciales y acceso físico</h3>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Generar tarjetas PVC</td><td>Vehiculares y peatonales, con QR verificable; cola de impresión; control de stock</td></tr>
+      <tr><td>Pluma vehicular (RFID)</td><td>Umbral de adeudo editable; override por casa (automático / forzar activo / forzar suspendido); semáforo de caseta en línea; bitácora completa</td></tr>
+      <tr><td>Puerta peatonal (rostros)</td><td>Aprueba/rechaza fotos, ve activos, retira quien ya no viva ahí. El acceso peatonal <strong>nunca</strong> se suspende por adeudo</td></tr>
+      <tr><td>Cámara en vivo y apertura remota</td><td>Ve y abre remotamente; comando caduca en 30s si la caseta está caída; bitácora de cada apertura</td></tr>
+      <tr><td>Red de vigilantes voluntarios</td><td>Aprueba o da de baja voluntarios</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section id="guardia">
+    <h2><span class="section-num">05</span><span class="pill pill-guardia" style="margin-right:10px;">GUARDIA</span>Rol: Guardia (caseta / vigilancia)</h2>
+    <p class="desc">Pantalla propia — no ve el panel de residente. Controla el movimiento físico del día.</p>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Qué hace</th></tr>
+      <tr><td>Iniciar / cerrar turno</td><td>Queda registrado quién estuvo en la caseta y cuándo</td></tr>
+      <tr><td>Alertas SOS</td><td>Banner inmediato con nombre, casa y ubicación; marca "atender" y cierra al resolverse</td></tr>
+      <tr><td>Escanear pase QR de visita</td><td>Confirma quién es, a qué casa va y validez; foto de INE opcional; marca salida</td></tr>
+      <tr><td>Cámara de la puerta peatonal</td><td>Ver en vivo y abrir remotamente — misma mecánica que el comité</td></tr>
+      <tr><td>Registrar visita sin pase (walk-in)</td><td>Nombre, casa, foto de INE, foto de placas — la IA lee la placa sola</td></tr>
+      <tr><td>Buscar placa</td><td>Verifica si un auto está registrado y de qué casa es</td></tr>
+      <tr><td>Directorio</td><td>Contactos de la colonia</td></tr>
+      <tr><td>Reservas del día</td><td>Entrega y recibe llaves de áreas comunes reservadas</td></tr>
+      <tr><td>Servicios, proveedores y paquetes</td><td>Registro de servicios de la villa, proveedores recurrentes, recepción y entrega de paquetería</td></tr>
+      <tr><td>Historial del día</td><td>Todas las entradas/salidas con evidencia fotográfica</td></tr>
+    </table>
+    </div>
+    <div class="callout">El guardia <strong>no decide</strong> suspensiones de la pluma — son automáticas por adeudo. Solo el comité hace overrides.</div>
+  </section>
+
+  <section id="automatico">
+    <h2><span class="section-num">06</span><span class="pill pill-todos" style="margin-right:10px;">TRANSVERSAL</span>Funciones automatizadas</h2>
+    <p class="desc">No dependen de un rol específico — operan solas o están disponibles para cualquiera.</p>
+    <div class="tbl-wrap">
+    <table>
+      <tr><th>Función</th><th>Cómo opera</th></tr>
+      <tr><td>Bot de Telegram "Caty"</td><td>Consulta saldo, registra abono por foto, reserva un área, responde dudas del reglamento, envía link de recuperación de contraseña</td></tr>
+      <tr><td>Notificaciones automáticas</td><td>SOS a comité/capitán/vigilantes de zona; saldo alto al residente; pago vencido (diario, automatizado)</td></tr>
+      <tr><td>Verificación de credencial pública</td><td>Cualquiera escanea el QR de una tarjeta o pase de visita y el sistema confirma vigencia, sin login ni exponer datos personales</td></tr>
+      <tr><td>Onboarding por código de invitación</td><td>El vecino nuevo se auto-registra con código tipo <code>CAT-&lt;casa&gt;</code> (o <code>PROP-&lt;casa&gt;</code>); solo aprobación final del comité</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section id="faltante">
+    <h2><span class="section-num">07</span>Lo que el sistema todavía no tiene</h2>
+    <p class="desc">Identificado en la propia bitácora de desarrollo — no es que no se haya pensado, es que no está construido todavía. Útil para no confundir "no existe en el modelo" con "no está implementado".</p>
+    <ul class="faltantes">
+      <li>Paquetería, propuestas/votaciones y marketplace de comunidad — existen en el modelo de datos, sin pantalla construida.</li>
+      <li>OCR de placas en la pluma vehicular en tiempo real — hoy el reconocimiento por IA es solo en el registro manual de caseta.</li>
+      <li>Índice de salud comunitaria (tablero de tendencia) — hay captura de datos, falta la visualización.</li>
+      <li>Modelo de cobro/facturación a las colonias como clientes — el acceso hoy se gobierna por aprobación del comité, no por un plan pagado.</li>
+    </ul>
+  </section>
+
+  <section id="dinamica">
+    <h2><span class="section-num">08</span>Cómo usar esto con Victoria</h2>
+    <ol class="steps">
+      <li>Recorrer cada tabla y marcar, para Lombardía: <strong>✅ ya lo hacen igual</strong>, <strong>🔁 lo hacen pero distinto</strong> (anotar cómo), o <strong>❌ no aplica / no lo necesitan</strong>.</li>
+      <li>Para cada función "🔁 distinto", anotar la regla específica de Lombardía (montos de multa, umbrales de adeudo, reglas de reservas...) — esas ya son parámetros por colonia en Vecinity y se ajustan sin tocar código.</li>
+      <li>Cualquier función que Victoria pida y no esté en ninguna tabla es candidata a funcionalidad nueva para el roadmap de miFracc — anotar qué tan seguido la usarían y por qué rol.</li>
+    </ol>
+  </section>
+
+  <footer>
+    Preparado para OperIA / miFracc a partir de los manuales de usuario y el código de Vecinity · 28 de agosto de 2026
+  </footer>
+
+</div>
+</body>
+</html>
