@@ -167,11 +167,11 @@ todo DDL esté explícitamente calificado con `mifracc.` (nunca sin schema, que 
 `public`). Después de cada lote: conteo de tablas de `mifracc` y `vecino` para confirmar avance
 esperado y cero cambio en `vecino`.
 
-Avance: 15/97 archivos aplicados (001-004, 006-014b — 005 excluido a propósito).
-`mifracc`: 0 → 5 → 49 tablas (el segundo lote, 007-014b, no crea tablas nuevas: son
-funciones/triggers/índices/2 buckets de Storage sobre lo ya creado). `vecino`: 79 tablas,
-sin cambio en ningún punto de los dos lotes. Cero errores en 15 archivos.
-Siguiente archivo en la secuencia: `015_tope_multa.sql`.
+Avance: 35/97 archivos aplicados (001-004, 006-014b, 015-034 — 005 excluido a propósito).
+`mifracc`: 0 → 5 → 49 → 54 tablas (el lote 015-034 agregó 5 tablas nuevas: service_providers,
+bank_ref_map, payment_plans, comunicados, reglamento). `vecino`: 79 tablas, sin cambio en
+ningún lote. Cero errores en 35 archivos.
+Siguiente archivo en la secuencia: `035_recibos_abonos.sql`.
 
 ## Próximo paso inmediato
 
